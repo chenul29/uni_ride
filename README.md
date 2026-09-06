@@ -73,6 +73,28 @@ npm run preview
 
 The development server will start at `http://localhost:5173`
 
+### Supabase Team Setup
+
+UniRide uses one shared Supabase project for the whole team. Each teammate needs a local `.env` file, but `.env` must never be committed.
+
+1. Clone the repository and install dependencies:
+
+```bash
+npm install
+```
+
+2. Create a local environment file. In PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+3. Fill `.env` with the shared `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` from the team lead or Supabase project settings.
+
+4. Start the app and open `http://localhost:5173/admin`. The dashboard should show `Supabase connected`.
+
+The Supabase Dashboard is shared separately from this Git repository. Database tables, columns, authentication settings, and Row Level Security policies must be created in the shared Supabase project so every teammate uses the same schema. Only the publishable key belongs in the frontend; never put a Supabase service-role key in `.env` or browser code.
+
 ## Project Structure
 
 ```
