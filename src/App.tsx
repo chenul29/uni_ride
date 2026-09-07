@@ -5,6 +5,7 @@ import { Features } from './components/Features'
 import { Feedback } from './components/Feedback'
 import { Footer } from './components/Footer'
 import { AdminDashboard } from './components/admin/AdminDashboard'
+import { ConductorVerification } from './components/conductor/ConductorVerification'
 
 /**
  * App Component
@@ -13,6 +14,10 @@ import { AdminDashboard } from './components/admin/AdminDashboard'
 function App() {
   if (window.location.pathname === '/admin') {
     return <AdminDashboard />
+  }
+
+  if (window.location.pathname === '/conductor') {
+    return <ConductorVerification />
   }
 
   return (
