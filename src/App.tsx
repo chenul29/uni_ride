@@ -4,7 +4,7 @@ import { HowItWorks } from './components/HowItWorks'
 import { Features } from './components/Features'
 import { Feedback } from './components/Feedback'
 import { Footer } from './components/Footer'
-import { AdminDashboard } from './components/admin/AdminDashboard'
+import { AdminLogin } from './components/admin/AdminLogin'
 
 /**
  * App Component
@@ -12,7 +12,7 @@ import { AdminDashboard } from './components/admin/AdminDashboard'
  */
 function App() {
   if (window.location.pathname === '/admin') {
-    return <AdminDashboard />
+    return <AdminLogin />
   }
 
   return (
