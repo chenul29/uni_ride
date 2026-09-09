@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { AdminIcon } from '../admin/AdminIcon'
+import { Html5Qrcode } from 'html5-qrcode'
 
 type VerificationState = 'idle' | 'valid' | 'invalid'
 type CameraStatus = 'closed' | 'starting' | 'scanning' | 'error'
