@@ -6,97 +6,137 @@ interface AdminLoginProps {
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
-  const toggleMode = () => {
-    setIsRegistering(!isRegistering);
-    setName('');
-    setEmail('');
-    setPassword('');
-    setError(null);
-  };
+  // Create Admin Modal & Form States (From Original Code)
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [name, setName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Login Function
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
-
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPassword = password.trim();
+    setError('');
 
     try {
-      if (isRegistering) {
-        // Create Admin
-        const { error: dbError } = await supabase
-          .from('admins')
-          .insert([{ name: name.trim(), email: cleanEmail, password: cleanPassword, role: 'admin' }]);
+      const { data, error: fetchError } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('email', email.trim().toLowerCase())
+        .eq('password', password.trim())
+        .single();
 
-        if (dbError) throw dbError;
+      if (fetchError || !data) {
+        throw new Error('Invalid email or password.');
+      }
 
-        alert('New Admin created successfully! Please sign in.');
-        setName('');
-        setEmail('');
-        setPassword('');
-        setIsRegistering(false);
-      } else {
-        // Check Login Details
-        const { data, error: dbError } = await supabase
-          .from('admins')
-          .select('*')
-          .eq('email', cleanEmail)
-          .eq('password', cleanPassword)
-          .maybeSingle();
-
-        if (dbError) throw dbError;
-
-        if (!data) {
-          throw new Error('Invalid email or password. Please check your credentials.');
-        }
-
-        alert('Login Successful!');
-
-        if (typeof onLoginSuccess === 'function') {
-          onLoginSuccess();
-        }
+      if (onLoginSuccess) {
+        onLoginSuccess();
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred during authentication.');
+      setError(err.message || 'Login failed.');
     } finally {
       setLoading(false);
     }
   };
 
+  // Add New Admin Function (Original Logic)
+  const handleAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from('admins')
+        .insert([{ 
+          name: name.trim(), 
+          email: newEmail.trim().toLowerCase(), 
+          password: newPassword.trim(), 
+          role: 'admin' 
+        }]);
+
+      if (error) throw error;
+
+      alert('New admin added successfully!');
+      setName('');
+      setNewEmail('');
+      setNewPassword('');
+      setShowAddModal(false);
+    } catch (err: any) {
+      alert('Error adding admin: ' + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
-        <div className="text-center">
-          <div className="mx-auto h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xl mb-3">
-            U
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900">
-            {isRegistering ? 'Create Admin Account' : 'Admin Login'}
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            {isRegistering
-              ? 'Enter new details to register an admin'
-              : 'Sign in to UniRide Admin Portal'}
-          </p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 relative">
+      <div className="bg-white p-8 rounded-xl shadow-md max-w-md w-full">
+        <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">Admin Login</h2>
+        <p className="text-sm text-center text-gray-500 mb-6">UniRide System Admin Access</p>
 
         {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-md mb-4 text-sm">
             {error}
           </div>
         )}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit} autoComplete="off">
-          <div className="space-y-4">
-            {isRegistering && (
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Email Address</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              placeholder="admin@uniride.lk"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Password</label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Authenticating...' : 'Sign In'}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center border-t pt-4">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="text-sm text-blue-600 font-medium hover:underline"
+          >
+            + Create Admin
+          </button>
+        </div>
+      </div>
+
+      {/* Modal / Popup Form to Create Admin (Original Modal) */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">Create New Admin</h3>
+            <form onSubmit={handleAddAdmin} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Full Name</label>
                 <input
@@ -104,66 +144,54 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter full name"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="John Doe"
                 />
               </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Email Address</label>
-              <input
-                type="email"
-                required
-                autoComplete="off"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="supun1234@gmail.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Password</label>
-              <input
-                type="password"
-                required
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="••••••••"
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="admin@uniride.lk"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="••••••••"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 border text-gray-600 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {submitting ? 'Adding...' : 'Add Admin'}
+                </button>
+              </div>
+            </form>
           </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {loading
-                ? 'Processing...'
-                : isRegistering
-                ? 'Create Account'
-                : 'Sign In'}
-            </button>
-          </div>
-        </form>
-
-        <div className="text-center pt-2">
-          <button
-            type="button"
-            onClick={toggleMode}
-            className="text-sm font-medium text-blue-600 hover:text-blue-500 underline"
-          >
-            {isRegistering
-              ? 'Already have an admin account? Sign In'
-              : 'Need to create a new Admin? Create Account'}
-          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 };
+
+export default AdminLogin;
