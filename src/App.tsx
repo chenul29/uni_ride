@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Navbar } from './components/Navbar'
 import { Hero } from './components/Hero'
 import { HowItWorks } from './components/HowItWorks'
@@ -12,12 +13,23 @@ import { AdminDashboard } from './components/admin/AdminDashboard'
  * Main application component that assembles the landing page
  */
 function App() {
-  if (window.location.pathname === '/admin/dashboard') {
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(
+    window.location.pathname === '/admin/dashboard',
+  )
+
+  if (window.location.pathname === '/admin/dashboard' && isAdminAuthenticated) {
     return <AdminDashboard />
   }
 
   if (window.location.pathname === '/admin') {
-    return <AdminLogin onLoginSuccess={() => { window.location.href = '/admin/dashboard' }} />
+    return (
+      <AdminLogin
+        onLoginSuccess={() => {
+          window.history.pushState({}, '', '/admin/dashboard')
+          setIsAdminAuthenticated(true)
+        }}
+      />
+    )
   }
 
   return (
