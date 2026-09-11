@@ -25,6 +25,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
     setError('');
 
     try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured.');
+      }
+
       const { data, error: fetchError } = await supabase
         .from('admins')
         .select('*')
@@ -52,6 +56,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
     setSubmitting(true);
 
     try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured.');
+      }
+
       const { error } = await supabase
         .from('admins')
         .insert([{ 

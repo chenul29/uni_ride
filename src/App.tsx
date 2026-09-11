@@ -16,14 +16,14 @@ function App() {
     return <AdminDashboard />
   }
 
+const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
+
   if (window.location.pathname === '/admin') {
     return (
-      <AdminLogin
-        onLoginSuccess={() => {
-          setIsAdminAuthenticated(true)
-          window.location.href = '/admin/dashboard'
-        }}
-      />
+      <AdminLogin onLoginSuccess={() => {
+        setIsAdminAuthenticated(true)
+        window.location.href = '/admin/dashboard'
+      }} />
     )
   }
 
