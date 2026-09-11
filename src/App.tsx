@@ -5,18 +5,26 @@ import { HowItWorks } from './components/HowItWorks'
 import { Features } from './components/Features'
 import { Feedback } from './components/Feedback'
 import { Footer } from './components/Footer'
+import AdminLogin from './components/admin/AdminLogin'
 import { AdminDashboard } from './components/admin/AdminDashboard'
 import { TicketCheckout } from './components/TicketCheckout'
 
-/**
- * App Component
- * Main application component that assembles the landing page
- */
 function App() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
 
   if (window.location.pathname === '/admin') {
     return <AdminDashboard />
+  }
+
+  if (window.location.pathname === '/admin') {
+    return (
+      <AdminLogin
+        onLoginSuccess={() => {
+          setIsAdminAuthenticated(true)
+          window.location.href = '/admin/dashboard'
+        }}
+      />
+    )
   }
 
   return (

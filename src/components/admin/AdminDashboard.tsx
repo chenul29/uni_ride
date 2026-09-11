@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AdminIcon } from './AdminIcon'
 import { supabase } from '../../lib/supabase'
+import { AdminManagement } from './AdminManagement'
 
 type IconName = Parameters<typeof AdminIcon>[0]['name']
 
@@ -77,6 +78,9 @@ export function AdminDashboard() {
         <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? 'Supabase connected' : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
         <div className="analytics-grid"><TicketSalesChart /><VerificationChart /></div><div className="lower-grid"><ActivityFeed /><FeedbackSnapshot /></div>
         <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p></div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} />)}</div></section>
+        
+        {/* Admin Management Module */}
+        <AdminManagement />
       </main></div>
   </div>
 }
