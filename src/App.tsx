@@ -5,14 +5,19 @@ import { Features } from './components/Features'
 import { Feedback } from './components/Feedback'
 import { Footer } from './components/Footer'
 import { AdminLogin } from './components/admin/AdminLogin'
+import { AdminDashboard } from './components/admin/AdminDashboard'
 
 /**
  * App Component
  * Main application component that assembles the landing page
  */
 function App() {
+  if (window.location.pathname === '/admin/dashboard') {
+    return <AdminDashboard />
+  }
+
   if (window.location.pathname === '/admin') {
-    return <AdminLogin />
+    return <AdminLogin onLoginSuccess={() => { window.location.href = '/admin/dashboard' }} />
   }
 
   return (
