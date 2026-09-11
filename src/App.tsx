@@ -7,13 +7,12 @@ import { Feedback } from './components/Feedback'
 import { Footer } from './components/Footer'
 import AdminLogin from './components/admin/AdminLogin'
 import { AdminDashboard } from './components/admin/AdminDashboard'
+import { TicketCheckout } from './components/TicketCheckout'
 
 function App() {
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(
-    window.location.pathname === '/admin/dashboard',
-  )
+  const [checkoutOpen, setCheckoutOpen] = useState(false)
 
-  if (window.location.pathname === '/admin/dashboard' && isAdminAuthenticated) {
+  if (window.location.pathname === '/admin') {
     return <AdminDashboard />
   }
 
@@ -32,12 +31,13 @@ function App() {
     <div className="w-full min-h-screen bg-white">
       <Navbar />
       <main>
-        <Hero />
+        <Hero onBookRide={() => setCheckoutOpen(true)} />
         <HowItWorks />
         <Features />
         <Feedback />
       </main>
       <Footer />
+      {checkoutOpen && <TicketCheckout onClose={() => setCheckoutOpen(false)} />}
     </div>
   )
 }

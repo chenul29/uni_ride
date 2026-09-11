@@ -5,11 +5,7 @@ import { TransportationIllustration } from './TransportationIllustration'
  * Landing hero section with headline, subheading, CTA buttons, and illustration
  * Features: Responsive layout, mobile stacking, subtle animations
  */
-export function Hero() {
-  const handleBooking = () => {
-    // Visual button only - no functionality yet
-    console.log('Book a Ride button clicked')
-  }
+export function Hero({ onBookRide }: { onBookRide: () => void }) {
 
   const handleHowItWorks = () => {
     // Visual button only - no functionality yet
@@ -46,7 +42,7 @@ export function Hero() {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button
-                onClick={handleBooking}
+                onClick={onBookRide}
                 className="px-8 py-3 bg-gradient-to-r from-primary-blue to-primary-dark-blue text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center gap-2"
               >
                 <span>📱</span> Book a Ride
