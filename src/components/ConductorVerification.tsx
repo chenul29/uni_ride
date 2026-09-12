@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Html5Qrcode } from 'html5-qrcode'
 
 type VerificationResult = 'valid' | 'invalid' | null
 
@@ -21,44 +22,51 @@ function QrFrame() {
 }
 
 export function ConductorVerification() {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
+  const scannerRef = useRef<Html5Qrcode | null>(null)
   const [cameraOpen, setCameraOpen] = useState(false)
   const [cameraMessage, setCameraMessage] = useState('Camera is ready when you are.')
   const [ticketScanned, setTicketScanned] = useState(false)
   const [facilityCode, setFacilityCode] = useState('')
   const [result, setResult] = useState<VerificationResult>(null)
 
-  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), [])
-
   useEffect(() => {
-    if (cameraOpen && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current
+    if (!cameraOpen) return
+
+    const scanner = new Html5Qrcode('qr-reader')
+    scannerRef.current = scanner
+    setCameraMessage('Point the camera at the student ticket QR code.')
+
+    scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1 },
+      (decodedText) => {
+        setTicketScanned(true)
+        setCameraMessage(`Ticket QR captured: ${decodedText}`)
+        scanner.stop().catch(() => undefined)
+        scanner.clear()
+        scannerRef.current = null
+        setCameraOpen(false)
+      },
+      () => undefined,
+    ).catch(() => {
+      setCameraMessage('Camera permission was not granted. Use the demo scan below.')
+    })
+
+    return () => {
+      scanner.stop().catch(() => undefined)
+      scanner.clear()
+      scannerRef.current = null
     }
   }, [cameraOpen])
 
   const openCamera = async () => {
     setResult(null)
     setCameraMessage('Requesting camera access...')
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraOpen(true)
-      setCameraMessage('Camera access is unavailable here. Use the demo scan below.')
-      return
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      streamRef.current = stream
-      setCameraOpen(true)
-      setCameraMessage('Point the camera at the student ticket QR code.')
-    } catch {
-      setCameraOpen(true)
-      setCameraMessage('Camera permission was not granted. Use the demo scan below.')
-    }
+    setCameraOpen(true)
   }
 
   const closeCamera = () => {
-    streamRef.current?.getTracks().forEach((track) => track.stop())
-    streamRef.current = null
+    scannerRef.current?.stop().catch(() => undefined)
     setCameraOpen(false)
   }
 
@@ -87,10 +95,10 @@ export function ConductorVerification() {
         <div className="mb-8 max-w-xl"><p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-blue-600">Ride operations / Ticket desk</p><h1 className="text-3xl font-extrabold tracking-tight text-blue-950 sm:text-4xl">Verify a student ticket</h1><p className="mt-3 text-sm leading-6 text-slate-500">Scan the ticket QR code, then enter the facility code printed on the conductor device.</p></div>
         <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><div className="mb-6 flex items-start justify-between gap-4"><div><span className="mb-2 grid h-8 w-8 place-items-center rounded-lg bg-blue-50 text-sm font-extrabold text-blue-700">01</span><h2 className="mt-3 text-xl font-bold text-blue-950">Scan ticket QR</h2><p className="mt-1 text-sm text-slate-500">Open the camera and centre the code in the frame.</p></div><span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700">Required</span></div>
-            {cameraOpen ? <div className="relative mx-auto max-w-[300px] overflow-hidden rounded-2xl bg-slate-900"><video ref={videoRef} autoPlay muted playsInline className="aspect-square w-full object-cover" /><div className="pointer-events-none absolute inset-7 rounded-xl border border-white/40" /><span className="absolute left-7 top-7 h-8 w-8 border-l-2 border-t-2 border-amber-400" /><span className="absolute right-7 top-7 h-8 w-8 border-r-2 border-t-2 border-amber-400" /><span className="absolute bottom-7 left-7 h-8 w-8 border-b-2 border-l-2 border-amber-400" /><span className="absolute bottom-7 right-7 h-8 w-8 border-b-2 border-r-2 border-amber-400" /></div> : <QrFrame />}
+            {cameraOpen ? <div id="qr-reader" className="relative mx-auto min-h-[300px] max-w-[300px] overflow-hidden rounded-2xl bg-slate-900" /> : <QrFrame />}
             <p className="mt-4 text-center text-xs text-slate-500" role="status">{cameraMessage}</p><div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-center">
               {!cameraOpen && !ticketScanned && <button type="button" onClick={openCamera} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800"><svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8.5A1.5 1.5 0 014.5 7h2l1-1.5h5L13.5 7h2A1.5 1.5 0 0117 8.5v8A1.5 1.5 0 0115.5 18h-11A1.5 1.5 0 013 16.5v-8zM8 12.5a3 3 0 106 0 3 3 0 00-6 0z" /></svg>Open camera</button>}
-              {cameraOpen && <><button type="button" onClick={markQrScanned} className="min-h-12 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-800">Confirm QR scan</button><button type="button" onClick={closeCamera} className="min-h-12 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50">Close camera</button></>}
+              {cameraOpen && <button type="button" onClick={closeCamera} className="min-h-12 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50">Close camera</button>}
               {!ticketScanned && <button type="button" onClick={markQrScanned} className="min-h-12 rounded-xl border border-blue-200 px-5 text-sm font-bold text-blue-700 transition hover:bg-blue-50">Use demo QR</button>}
             </div>{ticketScanned && <div className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"><span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-500 text-xs text-white">✓</span> Ticket QR scanned successfully</div>}
           </section>
