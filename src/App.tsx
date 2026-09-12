@@ -8,23 +8,25 @@ import { Footer } from './components/Footer'
 import AdminLogin from './components/admin/AdminLogin'
 import { AdminDashboard } from './components/admin/AdminDashboard'
 import { TicketCheckout } from './components/TicketCheckout'
+import { ConductorVerification } from './components/ConductorVerification'
 
 function App() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
 
   if (window.location.pathname === '/admin') {
-    return <AdminDashboard />
-  }
-
-const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false)
-
-  if (window.location.pathname === '/admin') {
     return (
       <AdminLogin onLoginSuccess={() => {
-        setIsAdminAuthenticated(true)
         window.location.href = '/admin/dashboard'
       }} />
     )
+  }
+
+  if (window.location.pathname === '/admin/dashboard') {
+    return <AdminDashboard />
+  }
+
+  if (window.location.pathname === '/conductor') {
+    return <ConductorVerification />
   }
 
   return (
