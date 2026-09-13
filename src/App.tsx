@@ -10,6 +10,7 @@ import { AdminDashboard } from './components/admin/AdminDashboard'
 import { TicketCheckout } from './components/TicketCheckout'
 import { ConductorVerification } from './components/ConductorVerification'
 import { StudentWallet } from './components/StudentWallet'
+import StudentLogin from './components/studnet/StudentLogin'
 
 type PurchasedTicket = {
   route: string
