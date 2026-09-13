@@ -23,6 +23,10 @@ export const AdminManagement: React.FC = () => {
   const fetchAdmins = async () => {
     setLoading(true);
     try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured.');
+      }
+
       const { data, error } = await supabase
         .from('admins')
         .select('id, name, email, role')
@@ -47,6 +51,10 @@ export const AdminManagement: React.FC = () => {
     if (!confirmDelete) return;
 
     try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured.');
+      }
+
       const { error } = await supabase
         .from('admins')
         .delete()

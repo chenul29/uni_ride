@@ -5,6 +5,9 @@
  * Responsive: grid layout that adapts to screen size
  */
 
+import { FormEvent, useState } from 'react'
+import { supabase } from '../lib/supabase'
+
 interface Testimonial {
   initials: string
   name: string
@@ -75,6 +78,47 @@ function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
 }
 
 export function Feedback() {
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [rating, setRating] = useState(5)
+  const [isSaving, setIsSaving] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSubmitError('')
+
+    if (!supabase) {
+      setSubmitError('Feedback is temporarily unavailable. Please try again later.')
+      return
+    }
+
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+
+    const { error } = await supabase.from('feedback').insert({
+      student_name: formData.get('studentName'),
+      feedback: formData.get('feedback'),
+      rating,
+    })
+
+    setIsSaving(false)
+
+    if (error) {
+      setSubmitError('We could not save your feedback. Please try again.')
+      return
+    }
+
+    setIsSubmitted(true)
+  }
+
+  const closeForm = () => {
+    setIsFormOpen(false)
+    setIsSubmitted(false)
+    setRating(5)
+    setSubmitError('')
+  }
+
   return (
     <section
       id="feedback"
@@ -103,11 +147,104 @@ export function Feedback() {
           <p className="text-neutral-secondary-text mb-6">
             Join 2,000+ students already using UniRide for convenient campus travel.
           </p>
-          <button className="px-8 py-3 bg-gradient-to-r from-primary-blue to-primary-dark-blue text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">
-            Get Started Today
+          <button
+            className="px-8 py-3 bg-gradient-to-r from-primary-blue to-primary-dark-blue text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200"
+            onClick={() => setIsFormOpen(true)}
+          >
+            Add Your Feedback
           </button>
         </div>
       </div>
+
+      {isFormOpen && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => event.target === event.currentTarget && closeForm()}
+        >
+          <section
+            className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-2xl sm:p-8"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="feedback-form-title"
+          >
+            <button
+              type="button"
+              className="absolute right-4 top-4 text-2xl leading-none text-slate-400 hover:text-slate-700"
+              onClick={closeForm}
+              aria-label="Close feedback form"
+            >
+              ×
+            </button>
+
+            {isSubmitted ? (
+              <div className="py-8 text-center">
+                <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-green-100 text-2xl font-bold text-green-600">
+                  ✓
+                </div>
+                <h2 id="feedback-form-title" className="mb-2 text-2xl font-bold text-neutral-main-text">
+                  Thank you for your feedback
+                </h2>
+                <p className="mb-6 text-sm text-neutral-secondary-text">
+                  Your experience helps us make UniRide better for everyone.
+                </p>
+                <button type="button" className="rounded-lg bg-primary-blue px-6 py-3 font-semibold text-white hover:bg-primary-dark-blue" onClick={closeForm}>
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="mb-6 pr-8">
+                  <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary-blue">Student feedback</p>
+                  <h2 id="feedback-form-title" className="text-2xl font-bold text-neutral-main-text">Share your experience</h2>
+                  <p className="mt-2 text-sm text-neutral-secondary-text">Tell us how UniRide is working for you.</p>
+                </div>
+
+                <form className="grid gap-5" onSubmit={handleSubmit}>
+                  <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                    Student name
+                    <input
+                      className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-normal outline-none focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/20"
+                      name="studentName"
+                      placeholder="Enter your name"
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                    Feedback
+                    <textarea
+                      className="min-h-28 resize-y rounded-lg border border-slate-300 px-3 py-3 text-sm font-normal outline-none focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/20"
+                      name="feedback"
+                      placeholder="What do you think about UniRide?"
+                      required
+                    />
+                  </label>
+                  <fieldset className="grid gap-2">
+                    <legend className="text-sm font-semibold text-slate-700">Rating</legend>
+                    <div className="flex gap-1" aria-label={`${rating} out of 5 stars selected`}>
+                      {[1, 2, 3, 4, 5].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`text-2xl ${value <= rating ? 'text-accent-orange' : 'text-slate-300'} hover:text-accent-orange`}
+                          onClick={() => setRating(value)}
+                          aria-label={`${value} star${value === 1 ? '' : 's'}`}
+                        >
+                          ★
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  {submitError && <p className="text-sm text-red-600" role="alert">{submitError}</p>}
+                  <button type="submit" disabled={isSaving} className="rounded-lg bg-primary-blue py-3 font-semibold text-white hover:bg-primary-dark-blue disabled:cursor-not-allowed disabled:opacity-60">
+                    {isSaving ? 'Saving feedback...' : 'Submit feedback'}
+                  </button>
+                </form>
+              </>
+            )}
+          </section>
+        </div>
+      )}
     </section>
   )
 }

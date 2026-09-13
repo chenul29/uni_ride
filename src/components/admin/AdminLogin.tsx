@@ -17,6 +17,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
     setError('');
 
     try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured.');
+      }
+
       const { data, error: fetchError } = await supabase
         .from('admins')
         .select('*')
