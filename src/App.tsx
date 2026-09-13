@@ -9,6 +9,7 @@ import AdminLogin from './components/admin/AdminLogin'
 import { AdminDashboard } from './components/admin/AdminDashboard'
 import { TicketCheckout } from './components/TicketCheckout'
 import { ConductorVerification } from './components/ConductorVerification'
+import StudentLogin from './components/studnet/StudentLogin'
 
 function App() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
@@ -24,9 +25,16 @@ function App() {
   if (window.location.pathname === '/admin/dashboard') {
     return <AdminDashboard />
   }
+if (window.location.pathname === '/conductor') {
+  return <ConductorVerification />
+  }
 
-  if (window.location.pathname === '/conductor') {
-    return <ConductorVerification />
+  if (window.location.pathname === '/student/login') {
+    return <StudentLogin />
+  }
+
+  if (window.location.pathname === '/student/register') {
+    return <StudentLogin mode="register" />
   }
 
   return (
