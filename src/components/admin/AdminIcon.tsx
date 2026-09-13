@@ -1,12 +1,13 @@
 import type { SVGProps } from 'react'
 
-type IconName = 'dashboard' | 'students' | 'wallet' | 'ticket' | 'feedback' | 'reports' | 'settings' | 'logout' | 'menu' | 'close' | 'bell' | 'chevron' | 'trend' | 'activity' | 'star' | 'download' | 'plus' | 'check' | 'alert' | 'clock'
+type IconName = 'dashboard' | 'students' | 'wallet' | 'ticket' | 'route' | 'feedback' | 'reports' | 'settings' | 'logout' | 'menu' | 'close' | 'bell' | 'chevron' | 'trend' | 'activity' | 'star' | 'download' | 'plus' | 'check' | 'alert' | 'clock'
 
 const paths: Record<IconName, string> = {
   dashboard: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   students: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
   wallet: 'M20 7V5a2 2 0 0 0-2-2H4a2 2 0 0 0 0 4h16v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5M16 13h2',
   ticket: 'M3 8a3 3 0 0 0 3-3h12a3 3 0 0 0 3 3v8a3 3 0 0 0-3 3H6a3 3 0 0 0-3-3zM13 5v14M9 9h1M9 13h1M9 17h1',
+  route: 'M5 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19 14a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM7.5 9.5c1.5 5 7.5 0 9 5',
   feedback: 'M21 11.5a8.38 8.38 0 0 1-9 8.5 9.42 9.42 0 0 1-4-.9L3 21l1.9-4A8.38 8.38 0 1 1 21 11.5z',
   reports: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h6',
   settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-1.4 1.4-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06-1.4-1.4.06-.06A1.65 1.65 0 0 0 9.6 15a1.65 1.65 0 0 0-1.51-1H8v-2h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06 1.4-1.4.06.06a1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 1-1.51V6h2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06 1.4 1.4-.06.06A1.65 1.65 0 0 0 19.4 10a1.65 1.65 0 0 0 1.51 1H21v2h-.09a1.65 1.65 0 0 0-1.51 1z',

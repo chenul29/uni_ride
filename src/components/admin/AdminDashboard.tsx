@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { AdminIcon } from './AdminIcon'
 import { supabase } from '../../lib/supabase'
 import { AdminManagement } from './AdminManagement'
@@ -7,7 +7,7 @@ type IconName = Parameters<typeof AdminIcon>[0]['name']
 
 const navItems: { label: string; icon: IconName }[] = [
   { label: 'Dashboard', icon: 'dashboard' }, { label: 'Students', icon: 'students' }, { label: 'Wallets', icon: 'wallet' },
-  { label: 'Tickets', icon: 'ticket' }, { label: 'Feedback', icon: 'feedback' }, { label: 'Reports', icon: 'reports' }, { label: 'Settings', icon: 'settings' },
+  { label: 'Tickets', icon: 'ticket' }, { label: 'Route', icon: 'route' }, { label: 'Feedback', icon: 'feedback' }, { label: 'Reports', icon: 'reports' }, { label: 'Settings', icon: 'settings' },
 ]
 
 const reports = [
@@ -77,6 +77,124 @@ function StudentsPanel({ students, loading, error, onDelete }: { students: Stude
     <div className="admin-panel-heading"><div><h2>Students</h2><p className="admin-panel-subtitle">Registered student accounts</p></div><span className="eyebrow">{students.length} total</span></div>
     {error && <p className="database-status database-status-error">{error}</p>}
     {loading ? <p className="admin-empty-state">Loading students...</p> : students.length === 0 ? <p className="admin-empty-state">No students have registered yet.</p> : <div className="students-table-wrap"><table className="students-table"><thead><tr><th>Name</th><th>Email</th><th>Joined</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{students.map((student) => <tr key={student.id}><td><strong>{student.full_name}</strong></td><td>{student.email}</td><td>{new Date(student.created_at).toLocaleDateString()}</td><td><button className="student-delete-button" onClick={() => onDelete(student)}>Delete</button></td></tr>)}</tbody></table></div>}
+  </section>
+}
+
+type Route = {
+  id: string
+  startingPoint: string
+  endingPoint: string
+  ticketPrice: number
+}
+
+function RoutePanel() {
+  const [routes, setRoutes] = useState<Route[]>([])
+  const [savedMessage, setSavedMessage] = useState('')
+  const [routeError, setRouteError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [deletingRouteId, setDeletingRouteId] = useState<string | null>(null)
+
+  const loadRoutes = async () => {
+    if (!supabase) {
+      setRouteError('Supabase is not configured.')
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('routes')
+      .select('id, starting_point, ending_point, ticket_price')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      setRouteError(error.message)
+      return
+    }
+
+    setRoutes((data || []).map((route) => ({
+      id: String(route.id),
+      startingPoint: route.starting_point,
+      endingPoint: route.ending_point,
+      ticketPrice: Number(route.ticket_price),
+    })))
+  }
+
+  useEffect(() => {
+    loadRoutes()
+  }, [])
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSavedMessage('')
+    setRouteError('')
+    const formData = new FormData(event.currentTarget)
+    const startingPoint = String(formData.get('startingPoint') || '').trim()
+    const endingPoint = String(formData.get('endingPoint') || '').trim()
+    const ticketPrice = Number(formData.get('ticketPrice'))
+
+    if (!supabase) {
+      setRouteError('Supabase is not configured.')
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const { error } = await supabase.from('routes').insert({
+        starting_point: startingPoint,
+        ending_point: endingPoint,
+        ticket_price: ticketPrice,
+      })
+
+      if (error) {
+        setRouteError(error.message)
+        return
+      }
+
+      await loadRoutes()
+      setSavedMessage('Route added successfully.')
+      event.currentTarget.reset()
+    } catch (error) {
+      setRouteError(error instanceof Error ? error.message : 'Could not save the route.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDelete = async (route: Route) => {
+    if (!window.confirm(`Delete the route from ${route.startingPoint} to ${route.endingPoint}?`)) return
+    if (!supabase) {
+      setRouteError('Supabase is not configured.')
+      return
+    }
+
+    setRouteError('')
+    setDeletingRouteId(route.id)
+    const { error } = await supabase.from('routes').delete().eq('id', route.id)
+    setDeletingRouteId(null)
+
+    if (error) {
+      setRouteError(error.message)
+      return
+    }
+
+    setRoutes((currentRoutes) => currentRoutes.filter(({ id }) => id !== route.id))
+  }
+
+  return <section id="route" className="admin-panel route-panel">
+    <div className="admin-panel-heading"><div><h2>Route</h2><p className="admin-panel-subtitle">Add a route and set its ticket price</p></div></div>
+    <form className="route-form" onSubmit={handleSubmit}>
+      <label>Starting point<input name="startingPoint" type="text" placeholder="Enter starting point" required /></label>
+      <label>Ending point<input name="endingPoint" type="text" placeholder="Enter ending point" required /></label>
+      <label>Ticket price<input name="ticketPrice" type="number" min="0" step="0.01" placeholder="0.00" required /></label>
+      <button type="submit" className="route-submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Add route'}</button>
+    </form>
+    {savedMessage && <p className="route-success" role="status">{savedMessage}</p>}
+    {routeError && <p className="database-status database-status-error" role="alert">{routeError}</p>}
+    {routes.length > 0 && <div className="route-list">
+      {routes.map((route) => <div className="route-list-item" key={route.id}>
+        <div><strong>{route.startingPoint} to {route.endingPoint}</strong><span>Route added to this session</span></div>
+        <div className="route-list-actions"><b>LKR {route.ticketPrice.toFixed(2)}</b><button type="button" className="route-delete-button" onClick={() => handleDelete(route)} disabled={deletingRouteId === route.id}>{deletingRouteId === route.id ? 'Deleting...' : 'Delete'}</button></div>
+      </div>)}
+    </div>}
   </section>
 }
 
@@ -165,6 +283,7 @@ export function AdminDashboard() {
     <div className="admin-main"><header className="admin-topbar"><button className="menu-button" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><AdminIcon name="menu" /></button><div><h1>Dashboard</h1><p>Overview of UniRide activity</p></div><div className="admin-user"><button className="notification-button" aria-label="Notifications"><AdminIcon name="bell" /><span /></button><div className="admin-avatar">AD</div><div className="admin-user-name"><strong>Admin</strong><small>Administrator</small></div><AdminIcon name="chevron" size={15} /></div></header>
       <main className="admin-content"><section className="admin-welcome"><div className="admin-welcome-copy"><span className="eyebrow">SLIIT Kandy / Admin Portal</span><h2>Good morning, Admin.</h2><p>Keep today&apos;s rides moving smoothly.</p><div className="quick-actions"><button><AdminIcon name="plus" size={16} /> Add Student</button><button><AdminIcon name="plus" size={16} /> Top Up Wallet</button></div></div><div className="welcome-mark"><AdminIcon name="dashboard" size={42} /></div></section>
         <section className="admin-pulse" aria-label="Today's dashboard summary"><div><span className="pulse-label">Students</span><strong>2,450</strong><small><AdminIcon name="trend" size={12} /> 12.5% this month</small></div><div><span className="pulse-label">Tickets sold</span><strong>328</strong><small><AdminIcon name="ticket" size={12} /> 43 still available</small></div><div><span className="pulse-label">Wallet top-ups</span><strong>LKR 32,500</strong><small><AdminIcon name="trend" size={12} /> 8.2% today</small></div></section>
+        <RoutePanel />
         <StudentsPanel students={students} loading={studentsLoading} error={studentsError} onDelete={deleteStudent} />
         <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? 'Supabase connected' : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
         <div className="analytics-grid"><TicketSalesChart /><VerificationChart /></div><div className="lower-grid"><ActivityFeed /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>

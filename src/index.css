@@ -63,3 +63,24 @@ html {
 .students-table tr:last-child td { border-bottom: 0; }
 .student-delete-button { border: 0; border-radius: 5px; background: #fef2f2; color: #dc2626; padding: 6px 9px; font: inherit; font-size: 11px; cursor: pointer; }
 .student-delete-button:hover { background: #fee2e2; }
+.route-panel { margin-top: 28px; }
+.route-form { display: grid; grid-template-columns: 1fr 1fr 180px auto; align-items: end; gap: 14px; margin-top: 18px; }
+.route-form label { display: grid; gap: 7px; color: #334155; font-size: 11px; font-weight: 700; }
+.route-form input { width: 100%; min-height: 42px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #1e293b; padding: 0 11px; font: inherit; font-size: 12px; }
+.route-form input:focus { outline: 2px solid rgba(37, 99, 235, .2); border-color: #2563eb; }
+.route-submit { min-height: 42px; border: 0; border-radius: 7px; background: #2563eb; color: #fff; padding: 0 15px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.route-submit:hover { background: #1e3a8a; }
+.route-submit:disabled { cursor: not-allowed; opacity: .6; }
+.route-success { margin: 14px 0 0; color: #15803d; font-size: 11px; }
+.route-list { display: grid; gap: 8px; margin-top: 18px; }
+.route-list-item { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 7px; background: #f8fbff; }
+.route-list-item strong, .route-list-item span { display: block; }
+.route-list-item strong { color: #1e293b; font-size: 12px; }
+.route-list-item span { margin-top: 3px; color: #94a3b8; font-size: 10px; }
+.route-list-actions { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.route-list-item b { color: #1e3a8a; font-size: 12px; }
+.route-delete-button { border: 0; border-radius: 5px; background: #fef2f2; color: #dc2626; padding: 6px 9px; font: inherit; font-size: 11px; cursor: pointer; }
+.route-delete-button:hover { background: #fee2e2; }
+.route-delete-button:disabled { cursor: not-allowed; opacity: .6; }
+@media (max-width: 900px) { .route-form { grid-template-columns: 1fr 1fr; }.route-submit { width: fit-content; padding: 0 20px; } }
+@media (max-width: 480px) { .route-form { grid-template-columns: 1fr; }.route-submit { width: 100%; } }
