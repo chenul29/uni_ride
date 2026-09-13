@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react'
 
 type TicketCheckoutProps = {
   onClose: () => void
+  onPurchase: (ticket: TicketDetails) => void
 }
 
 type TicketDetails = {
@@ -13,13 +14,16 @@ type TicketDetails = {
 }
 
 const routes = [
-  { name: 'Kandy City to SLIIT Kandy', time: '7:30 AM', price: 250 },
-  { name: 'Peradeniya to SLIIT Kandy', time: '8:00 AM', price: 200 },
-  { name: 'SLIIT Kandy to Kandy City', time: '4:30 PM', price: 250 },
+  { name: 'Peradeniya → SLIIT KandyUni', time: '7:20 AM', price: 150 },
+  { name: 'Kandy → SLIIT KandyUni', time: '7:50 AM', price: 100 },
+  { name: 'SLIIT KandyUni → Kandy', price: 100 },
+  { name: 'SLIIT KandyUni → Peradeniya', price: 150 },
 ]
 
-export function TicketCheckout({ onClose }: TicketCheckoutProps) {
+export function TicketCheckout({ onClose, onPurchase }: TicketCheckoutProps) {
   const [routeIndex, setRouteIndex] = useState(0)
+  const [morningExpanded, setMorningExpanded] = useState(false)
+  const [eveningExpanded, setEveningExpanded] = useState(false)
   const [tickets, setTickets] = useState(1)
   const [payment, setPayment] = useState('UniRide wallet')
   const [ticket, setTicket] = useState<TicketDetails | null>(null)
@@ -32,13 +36,15 @@ export function TicketCheckout({ onClose }: TicketCheckoutProps) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    setTicket({
+    const purchasedTicket = {
       route: route.name,
       tickets,
       payment,
       total,
       token: `UR${Math.floor(1000 + Math.random() * 9000)}`,
-    })
+    }
+    setTicket(purchasedTicket)
+    onPurchase(purchasedTicket)
   }
 
   return (
@@ -64,15 +70,73 @@ export function TicketCheckout({ onClose }: TicketCheckoutProps) {
           <>
             <div className="checkout-heading">
               <span className="checkout-eyebrow">Student ticket purchase</span>
-              <h2 id="checkout-title">Book your university ride</h2>
+              <h2 id="checkout-title">Book Your University Ride</h2>
               <p>Choose a route and reserve your seat in a few seconds.</p>
             </div>
             <form onSubmit={handleSubmit}>
               <label>
                 Route
-                <select value={routeIndex} onChange={(event) => setRouteIndex(Number(event.target.value))}>
-                  {routes.map((item, index) => <option value={index} key={item.name}>{item.name} · {item.time} · LKR {item.price}</option>)}
-                </select>
+                <div className="route-picker">
+                  <button
+                    className="route-toggle"
+                    type="button"
+                    aria-expanded={morningExpanded}
+                    onClick={() => setMorningExpanded((expanded) => !expanded)}
+                  >
+                    <span>Morning Route</span>
+                    <span className="route-toggle-detail">Departure Time: 7.20AM</span>
+                    <span className="route-toggle-icon">{morningExpanded ? '−' : '+'}</span>
+                  </button>
+                  {morningExpanded && (
+                    <div className="route-options">
+                      {routes.slice(0, 2).map((item, index) => (
+                        <button
+                          className={`route-option${routeIndex === index ? ' selected' : ''}`}
+                          type="button"
+                          key={item.name}
+                          onClick={() => setRouteIndex(index)}
+                        >
+                          <span>
+                            <strong>{item.name}</strong>
+                            <small>Departure time: {item.time}</small>
+                          </span>
+                          <b>LKR {item.price}</b>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    className="route-toggle evening-route"
+                    type="button"
+                    aria-expanded={eveningExpanded}
+                    onClick={() => setEveningExpanded((expanded) => !expanded)}
+                  >
+                    <span>Evening Route</span>
+                    <span className="route-toggle-detail">Departure Time: 5:30 PM</span>
+                    <span className="route-toggle-icon">{eveningExpanded ? '−' : '+'}</span>
+                  </button>
+                  {eveningExpanded && (
+                    <div className="route-options evening-options">
+                      {routes.slice(2).map((item, index) => {
+                        const actualIndex = index + 2
+                        return (
+                          <button
+                            className={`route-option${routeIndex === actualIndex ? ' selected' : ''}`}
+                            type="button"
+                            key={item.name}
+                            onClick={() => setRouteIndex(actualIndex)}
+                          >
+                            <span>
+                              <strong>{item.name}</strong>
+                              {item.time && <small>Departure time: {item.time}</small>}
+                            </span>
+                            <b>LKR {item.price}</b>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </label>
               <label>
                 Number of tickets
