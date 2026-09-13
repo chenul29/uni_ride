@@ -7,8 +7,7 @@ import { TransportationIllustration } from './TransportationIllustration'
  */
 export function Hero() {
   const handleBooking = () => {
-    // Visual button only - no functionality yet
-    console.log('Book a Ride button clicked')
+    window.location.href = '/student-wallet'
   }
 
   const handleHowItWorks = () => {

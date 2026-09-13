@@ -5,6 +5,7 @@ import { Features } from './components/Features'
 import { Feedback } from './components/Feedback'
 import { Footer } from './components/Footer'
 import { AdminLogin } from './components/admin/AdminLogin'
+import { StudentWallet } from './components/StudentWallet'
 
 /**
  * App Component
@@ -13,6 +14,10 @@ import { AdminLogin } from './components/admin/AdminLogin'
 function App() {
   if (window.location.pathname === '/admin') {
     return <AdminLogin />
+  }
+
+  if (window.location.pathname === '/student-wallet') {
+    return <StudentWallet />
   }
 
   return (

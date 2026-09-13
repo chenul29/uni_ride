@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AdminIcon } from './AdminIcon'
-import { supabase } from '../../lib/supabase'
+import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 
 type IconName = Parameters<typeof AdminIcon>[0]['name']
 
@@ -58,6 +58,11 @@ export function AdminDashboard() {
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking')
 
   useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      setConnectionStatus('error')
+      return
+    }
+
     supabase.auth.getSession()
       .then(({ error }) => setConnectionStatus(error ? 'error' : 'connected'))
       .catch(() => setConnectionStatus('error'))

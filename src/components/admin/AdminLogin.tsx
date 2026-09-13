@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 
 export const AdminLogin = ({ onLoginSuccess }: { onLoginSuccess?: () => void }) => {
   const [email, setEmail] = useState('');
@@ -11,6 +11,12 @@ export const AdminLogin = ({ onLoginSuccess }: { onLoginSuccess?: () => void }) 
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
+
+    if (!isSupabaseConfigured || !supabase) {
+      setErrorMsg('Supabase is not configured. Add the required environment variables and try again.');
+      setLoading(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
