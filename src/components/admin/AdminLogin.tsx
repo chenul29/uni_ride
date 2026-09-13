@@ -28,7 +28,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
         throw new Error('Invalid email or password.');
       }
 
-      // Save logged in Admin Name for greeting banner
+      // Logged in Admin ගේ Name එක localStorage එකේ Save කිරීම
       localStorage.setItem('adminName', data.name);
 
       if (onLoginSuccess) {
