@@ -57,9 +57,16 @@ function App() {
   if (window.location.pathname === '/admin/dashboard') {
     return <AdminDashboard />
   }
+if (window.location.pathname === '/conductor') {
+  return <ConductorVerification />
+  }
 
-  if (window.location.pathname === '/conductor') {
-    return <ConductorVerification />
+  if (window.location.pathname === '/student/login') {
+    return <StudentLogin />
+  }
+
+  if (window.location.pathname === '/student/register') {
+    return <StudentLogin mode="register" />
   }
 
   return (

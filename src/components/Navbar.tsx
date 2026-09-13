@@ -82,9 +82,9 @@ export function Navbar() {
 
           {/* Right Section - Login Button and Mobile Menu Toggle */}
           <div className="flex items-center space-x-4">
-            <button className="hidden sm:block px-6 py-2 text-primary-blue border-2 border-primary-blue rounded-lg font-semibold hover:bg-primary-blue hover:text-white transition-all duration-200">
+            <a href="/student/login" className="hidden sm:block px-6 py-2 text-primary-blue border-2 border-primary-blue rounded-lg font-semibold hover:bg-primary-blue hover:text-white transition-all duration-200">
               Login
-            </button>
+            </a>
 
             {/* Mobile Menu Toggle */}
             <button
@@ -124,9 +124,9 @@ export function Navbar() {
             >
               Feedback
             </button>
-            <button className="block w-full px-4 py-2 mt-2 text-primary-blue border-2 border-primary-blue rounded-lg font-semibold hover:bg-primary-blue hover:text-white transition-all duration-200">
+            <a href="/student/login" className="block w-full px-4 py-2 mt-2 text-center text-primary-blue border-2 border-primary-blue rounded-lg font-semibold hover:bg-primary-blue hover:text-white transition-all duration-200">
               Login
-            </button>
+            </a>
           </div>
         )}
       </div>

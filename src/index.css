@@ -52,3 +52,14 @@ html {
 .wallet-low-balance { display: flex; align-items: center; gap: 9px; margin: -4px 0 16px; padding: 10px 12px; border: 1px solid #fed7aa; border-radius: 8px; background: #fff7ed; color: #9a3412; }.wallet-low-balance > span { width: 18px; height: 18px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #f97316; color: #fff; font-size: 12px; font-weight: 800; }.wallet-low-balance p { margin: 0; font-size: 11px; font-weight: 700; line-height: 1.4; }
 .route-picker { display: grid; gap: 8px; }.route-toggle, .route-option { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; font: inherit; text-align: left; cursor: pointer; }.route-toggle { min-height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 13px; }.route-toggle:hover, .route-toggle.selected { border-color: #2563eb; background: #f8fbff; }.route-toggle-icon { color: #2563eb; font-size: 19px; font-weight: 400; }.route-options { display: grid; gap: 7px; margin: -2px 0 0 12px; padding-left: 12px; border-left: 2px solid #dbeafe; }.route-option { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 12px; }.route-option:hover, .route-option.selected { border-color: #2563eb; background: #eff6ff; }.route-option span { display: grid; gap: 4px; }.route-option strong { color: #1e293b; font-size: 12px; }.route-option small, .route-toggle-detail { color: #64748b; font-size: 11px; font-weight: 400; }.route-option b { flex: 0 0 auto; color: #1e3a8a; font-size: 12px; }.evening-route { margin-top: 1px; }.evening-route.selected .route-toggle-detail { color: #2563eb; font-weight: 700; }
 @media (max-width: 480px) { .checkout-modal { padding: 27px 20px 22px; }.checkout-heading h2, .checkout-success h2 { font-size: 23px; }.checkout-fields { grid-template-columns: 1fr; gap: 17px; }.booking-token { font-size: 25px; } }
+
+.admin-panel-subtitle { margin: 4px 0 0; color: #64748b; font-size: 11px; }
+.admin-empty-state { margin: 20px 0 2px; color: #64748b; font-size: 12px; }
+.students-table-wrap { overflow-x: auto; margin-top: 18px; }
+.students-table { width: 100%; border-collapse: collapse; min-width: 560px; font-size: 12px; }
+.students-table th { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; color: #94a3b8; font-size: 10px; font-weight: 700; text-align: left; text-transform: uppercase; letter-spacing: .5px; }
+.students-table td { padding: 13px 12px; border-bottom: 1px solid #f1f5f9; color: #64748b; }
+.students-table td strong { color: #1e293b; }
+.students-table tr:last-child td { border-bottom: 0; }
+.student-delete-button { border: 0; border-radius: 5px; background: #fef2f2; color: #dc2626; padding: 6px 9px; font: inherit; font-size: 11px; cursor: pointer; }
+.student-delete-button:hover { background: #fee2e2; }
