@@ -58,6 +58,11 @@ export function AdminDashboard() {
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking')
 
   useEffect(() => {
+    if (!supabase) {
+      setConnectionStatus('error')
+      return
+    }
+
     supabase.auth.getSession()
       .then(({ error }) => setConnectionStatus(error ? 'error' : 'connected'))
       .catch(() => setConnectionStatus('error'))

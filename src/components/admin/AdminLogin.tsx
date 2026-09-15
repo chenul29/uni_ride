@@ -13,6 +13,11 @@ export const AdminLogin = ({ onLoginSuccess }: { onLoginSuccess?: () => void }) 
     setErrorMsg('');
 
     try {
+      if (!supabase) {
+        setErrorMsg('Supabase is not configured. Add the VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY values to your .env file.');
+        return;
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password,
