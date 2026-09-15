@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 type WalletTicket = {
   route: string
   tickets: number
@@ -17,9 +19,27 @@ type StudentWalletProps = {
   history: PurchaseHistoryEntry[]
   balance: number
   onClose: () => void
+  onDone: () => Promise<void>
 }
 
-export function StudentWallet({ ticket, history, balance, onClose }: StudentWalletProps) {
+export function StudentWallet({ ticket, history, balance, onClose, onDone }: StudentWalletProps) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleDone = async () => {
+    setSaving(true)
+    setError('')
+
+    try {
+      await onDone()
+      onClose()
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Could not save wallet transaction.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="checkout-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="checkout-modal wallet-modal" role="dialog" aria-modal="true" aria-labelledby="wallet-title">
@@ -76,7 +96,10 @@ export function StudentWallet({ ticket, history, balance, onClose }: StudentWall
             ))}
           </div>
         </div>
-        <button className="checkout-primary" onClick={onClose}>Done</button>
+        {error && <p className="checkout-note" role="alert">{error}</p>}
+        <button className="checkout-primary" onClick={handleDone} disabled={saving}>
+          {saving ? 'Saving...' : 'Done'}
+        </button>
       </section>
     </div>
   )

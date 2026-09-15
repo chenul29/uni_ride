@@ -11,6 +11,7 @@ import { TicketCheckout } from './components/TicketCheckout'
 import { ConductorVerification } from './components/ConductorVerification'
 import { StudentWallet } from './components/StudentWallet'
 import StudentLogin from './components/studnet/StudentLogin'
+import { supabase } from './lib/supabase'
 
 type PurchasedTicket = {
   route: string
@@ -35,6 +36,24 @@ function App() {
   const [walletTicket, setWalletTicket] = useState<PurchasedTicket | null>(null)
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistoryEntry[]>([])
   const [walletBalance, setWalletBalance] = useState(INITIAL_WALLET_BALANCE)
+
+  const saveWalletTransaction = async () => {
+    if (!walletTicket || !supabase) {
+      throw new Error('Supabase is not configured.')
+    }
+
+    const { error } = await supabase.from('wallet_transactions').insert({
+      booking_token: walletTicket.token,
+      route: walletTicket.route,
+      tickets: walletTicket.tickets,
+      payment_method: walletTicket.payment,
+      amount: walletTicket.total,
+      balance_after: walletBalance,
+      status: 'completed',
+    })
+
+    if (error) throw error
+  }
 
   useEffect(() => {
     const removeExpiredHistory = () => {
@@ -102,7 +121,7 @@ if (window.location.pathname === '/conductor') {
           }}
         />
       )}
-      {walletTicket && <StudentWallet ticket={walletTicket} history={purchaseHistory} balance={walletBalance} onClose={() => setWalletTicket(null)} />}
+      {walletTicket && <StudentWallet ticket={walletTicket} history={purchaseHistory} balance={walletBalance} onClose={() => setWalletTicket(null)} onDone={saveWalletTransaction} />}
     </div>
   )
 }
