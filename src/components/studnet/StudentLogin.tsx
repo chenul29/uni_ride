@@ -40,15 +40,9 @@ export default function StudentLogin({ mode = 'login' }: StudentLoginProps) {
 				})
 				if (signUpError || !data.user) throw signUpError || new Error('Could not create account.')
 
-				if (data.session) {
-					const { error: profileError } = await supabase.from('students').insert({
-						auth_user_id: data.user.id,
-						full_name: fullName.trim(),
-						email: email.trim().toLowerCase(),
-					})
-					if (profileError && profileError.code !== '23505') throw profileError
-				}
-				setMessage('Account created successfully. You can now sign in.')
+				setMessage(data.session
+					? 'Account created successfully. You can now sign in.'
+					: 'Account created. Check your email to confirm your account, then sign in.')
 			} else {
 				const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
 				if (signInError) throw signInError
