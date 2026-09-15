@@ -2,7 +2,7 @@ import { FormEvent, useState } from 'react'
 
 type TicketCheckoutProps = {
   onClose: () => void
-  onPurchase: (ticket: TicketDetails) => void
+  onPurchase: (ticket: TicketDetails) => void | Promise<void>
 }
 
 type TicketDetails = {
@@ -34,8 +34,11 @@ export function TicketCheckout({ onClose, onPurchase }: TicketCheckoutProps) {
   const route = routes[routeIndex]
   const total = route.price * tickets
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const [purchaseError, setPurchaseError] = useState('')
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setPurchaseError('')
     const purchasedTicket = {
       route: route.name,
       tickets,
@@ -43,8 +46,12 @@ export function TicketCheckout({ onClose, onPurchase }: TicketCheckoutProps) {
       total,
       token: `UR${Math.floor(1000 + Math.random() * 9000)}`,
     }
-    setTicket(purchasedTicket)
-    onPurchase(purchasedTicket)
+    try {
+      await onPurchase(purchasedTicket)
+      setTicket(purchasedTicket)
+    } catch (error) {
+      setPurchaseError(error instanceof Error ? error.message : 'Could not complete the purchase.')
+    }
   }
 
   return (
@@ -177,6 +184,7 @@ export function TicketCheckout({ onClose, onPurchase }: TicketCheckoutProps) {
                 </fieldset>
               )}
               <div className="checkout-total"><span>Total</span><strong>LKR {total.toLocaleString()}</strong></div>
+              {purchaseError && <p className="database-status database-status-error" role="alert">{purchaseError}</p>}
               <button className="checkout-primary" type="submit">Confirm and purchase</button>
               <p className="checkout-note">Payment processing will be connected to your student wallet.</p>
             </form>
