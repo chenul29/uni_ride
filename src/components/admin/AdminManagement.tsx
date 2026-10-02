@@ -75,6 +75,10 @@ export const AdminManagement: React.FC = () => {
     setSubmitting(true);
 
     try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured.');
+      }
+
       const { error } = await supabase
         .from('admins')
         .insert([{ 
