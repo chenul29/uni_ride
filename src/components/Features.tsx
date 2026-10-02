@@ -36,9 +36,9 @@ const features: Feature[] = [
 
 function FeatureCard({ feature }: { feature: Feature }) {
   return (
-    <div className="group bg-white border border-neutral-border rounded-2xl p-8 hover:border-primary-blue hover:shadow-xl transition-all duration-300">
+    <div className="group border-t-2 border-neutral-border bg-white p-6 transition-colors duration-300 hover:border-primary-blue">
       {/* Icon */}
-      <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-blue/10 to-accent-orange/10 rounded-xl group-hover:from-primary-blue/20 group-hover:to-accent-orange/20 transition-all duration-300 mb-6">
+      <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50">
         <span className="text-3xl">{feature.icon}</span>
       </div>
 
@@ -53,7 +53,7 @@ function FeatureCard({ feature }: { feature: Feature }) {
       </p>
 
       {/* Accent line - bottom left */}
-      <div className="mt-6 h-1 w-0 bg-gradient-to-r from-primary-blue to-accent-orange rounded group-hover:w-12 transition-all duration-300" />
+      <div className="mt-6 h-0.5 w-8 rounded bg-accent-orange" />
     </div>
   )
 }

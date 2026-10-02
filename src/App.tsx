@@ -53,12 +53,14 @@ function App() {
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistoryEntry[]>([])
   const [walletBalance, setWalletBalance] = useState(INITIAL_WALLET_BALANCE)
   const [purchaseHistoryLoading, setPurchaseHistoryLoading] = useState(true)
+  const [studentAuthenticated, setStudentAuthenticated] = useState(false)
 
   const decreaseWalletBalance = async (amount: number) => {
-    if (!supabase) return null
+    if (!supabase) throw new Error('Supabase is not configured.')
 
     const { data: userData, error: userError } = await supabase.auth.getUser()
-    if (userError || !userData.user) return null
+    if (userError) throw userError
+    if (!userData.user) throw new Error('Please sign in as a student before booking a ride.')
 
     const { data: student, error: studentError } = await supabase
       .from('students')
@@ -67,7 +69,7 @@ function App() {
       .maybeSingle()
 
     if (studentError) throw studentError
-    if (!student) return null
+    if (!student) throw new Error('Your student profile is not ready yet. Please sign in again.')
 
     const { data: walletRows, error: walletError } = await supabase
       .from('wallet')
@@ -124,6 +126,69 @@ function App() {
   }
 
   useEffect(() => {
+    if (!supabase) {
+      setPurchaseHistoryLoading(false)
+      return
+    }
+    const client = supabase
+
+    const loadStudentWallet = async () => {
+      const { data: userData, error: userError } = await client.auth.getUser()
+      if (userError) {
+        setStudentAuthenticated(false)
+        return
+      }
+
+      if (!userData.user) {
+        setStudentAuthenticated(false)
+        return
+      }
+
+      const { data: student, error: studentError } = await client
+        .from('students')
+        .select('id')
+        .eq('auth_user_id', userData.user.id)
+        .maybeSingle()
+
+      if (studentError || !student) {
+        setStudentAuthenticated(false)
+        return
+      }
+
+      setStudentAuthenticated(true)
+      const { data: walletRows, error: walletError } = await client
+        .from('wallet')
+        .select('id, amount')
+        .eq('student_id', student.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (walletError) return
+      const wallet = (walletRows || [])[0] as WalletRow | undefined
+      if (wallet) {
+        setWalletBalance(Number(wallet.amount))
+      } else {
+        const { data: createdWallet, error: createWalletError } = await client
+          .from('wallet')
+          .insert({ student_id: student.id, amount: INITIAL_WALLET_BALANCE })
+          .select('amount')
+          .single()
+
+        if (!createWalletError && createdWallet) {
+          setWalletBalance(Number(createdWallet.amount))
+        }
+      }
+    }
+
+    loadStudentWallet()
+    const { data: authListener } = client.auth.onAuthStateChange(() => {
+      loadStudentWallet()
+    })
+
+    return () => authListener.subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
     const removeExpiredHistory = () => {
       const cutoff = Date.now() - HISTORY_RETENTION_MS
       setPurchaseHistory((history) => history.filter((entry) => entry.purchasedAt >= cutoff))
@@ -161,7 +226,7 @@ function App() {
       const { data: transactions, error: transactionError } = await supabase
         .from('wallet_transactions')
         .select('booking_token, route, tickets, payment_method, amount, status, created_at')
-        .or(`student_id.eq.${student.id},student_id.is.null`)
+        .eq('student_id', student.id)
         .order('created_at', { ascending: false })
 
       if (!transactionError) {
@@ -236,6 +301,9 @@ if (window.location.pathname === '/conductor') {
         <TicketCheckout
           onClose={() => setCheckoutOpen(false)}
           onPurchase={async (ticket) => {
+            if (!studentAuthenticated) {
+              throw new Error('Please sign in as a student before booking a ride.')
+            }
             const updatedBalance = ticket.payment === 'UniRide wallet'
               ? await decreaseWalletBalance(ticket.total)
               : null

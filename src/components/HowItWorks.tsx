@@ -43,10 +43,10 @@ function StepCard({ step, isLast }: { step: Step; isLast: boolean }) {
   return (
     <div className="flex flex-col items-center relative flex-1">
       {/* Step card container */}
-      <div className="bg-white border-2 border-neutral-border rounded-2xl p-6 sm:p-8 w-full hover:border-primary-blue hover:shadow-lg transition-all duration-300 min-h-[260px] flex flex-col justify-between">
+      <div className="flex min-h-[240px] w-full flex-col justify-between rounded-xl border border-neutral-border bg-white p-6 transition-colors duration-300 hover:border-primary-blue sm:p-8">
         {/* Step number with orange accent */}
         <div className="flex items-start justify-between mb-4">
-          <span className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-accent-orange/20 to-accent-orange/10 rounded-full font-bold text-lg text-accent-orange">
+          <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-orange-50 text-lg font-bold text-accent-orange">
             {step.number}
           </span>
           <span className="text-4xl">{step.icon}</span>
@@ -84,7 +84,7 @@ export function HowItWorks() {
   return (
     <section
       id="how-it-works"
-      className="relative py-16 sm:py-20 lg:py-28 bg-gradient-to-b from-white to-neutral-background"
+      className="relative bg-neutral-background py-16 sm:py-20 lg:py-24"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
