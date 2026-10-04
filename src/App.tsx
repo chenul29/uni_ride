@@ -12,6 +12,7 @@ import { ConductorVerification } from './components/ConductorVerification'
 import { StudentWallet } from './components/StudentWallet'
 import { PurchasedTickets } from './components/PurchasedTickets'
 import StudentLogin from './components/studnet/StudentLogin'
+import StudentProfile from './components/studnet/StudentProfile'
 import { LiveBusLauncher, LiveBusTracking } from './components/LiveBusTracking'
 import { supabase } from './lib/supabase'
 
@@ -278,6 +279,10 @@ if (window.location.pathname === '/conductor') {
 
   if (window.location.pathname === '/student/register') {
     return <StudentLogin mode="register" />
+  }
+
+  if (window.location.pathname === '/student/profile') {
+    return <StudentProfile />
   }
 
   if (window.location.pathname === '/tracking') {

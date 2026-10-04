@@ -10,6 +10,8 @@ import { supabase } from '../lib/supabase'
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [student, setStudent] = useState<User | null>(null)
+  const [profileName, setProfileName] = useState('')
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('')
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen)
 
@@ -25,6 +27,24 @@ export function Navbar() {
     return () => authListener.subscription.unsubscribe()
   }, [])
 
+  useEffect(() => {
+    if (!supabase || !student) {
+      setProfileName('')
+      setProfilePhotoUrl('')
+      return
+    }
+
+    let active = true
+    supabase.from('students').select('full_name, photo_url').eq('auth_user_id', student.id).maybeSingle()
+      .then(({ data }) => {
+        if (active && data) {
+          setProfileName(data.full_name || '')
+          setProfilePhotoUrl(data.photo_url || '')
+        }
+      })
+    return () => { active = false }
+  }, [student?.id, student?.user_metadata?.full_name])
+
   const handleSignOut = async () => {
     if (!supabase) return
     const { error } = await supabase.auth.signOut()
@@ -36,7 +56,8 @@ export function Navbar() {
     window.location.href = '/'
   }
 
-  const studentName = student?.user_metadata?.full_name || student?.email?.split('@')[0] || 'Student'
+  const studentName = profileName || student?.user_metadata?.full_name || student?.email?.split('@')[0] || 'Student'
+  const avatarUrl = profilePhotoUrl || String(student?.user_metadata?.avatar_url || '')
   const studentInitial = studentName.charAt(0).toUpperCase()
 
   // Smooth scroll to section
@@ -123,11 +144,11 @@ export function Navbar() {
           <div className="flex items-center space-x-4">
             {student ? (
               <div className="hidden sm:flex items-center gap-3">
-                <div className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-sm font-bold text-primary-dark-blue" aria-hidden="true">{studentInitial}</div>
-                <div className="max-w-[150px] text-right">
+                {avatarUrl ? <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-sm font-bold text-primary-dark-blue" aria-hidden="true">{studentInitial}</div>}
+                <a href="/student/profile" className="max-w-[150px] text-right hover:text-primary-blue" aria-label="Open student profile">
                   <p className="truncate text-sm font-bold text-primary-dark-blue">{studentName}</p>
                   <p className="truncate text-xs text-neutral-secondary-text">{student.email}</p>
-                </div>
+                </a>
                 <button type="button" onClick={handleSignOut} className="px-3 py-2 text-sm font-semibold text-primary-blue border border-primary-blue rounded-lg hover:bg-primary-blue hover:text-white transition-all duration-200">
                   Sign out
                 </button>
@@ -179,11 +200,11 @@ export function Navbar() {
             {student ? (
               <div className="mt-2 border-t border-neutral-border pt-3">
                 <div className="mb-3 flex items-center gap-3 px-4">
-                  <div className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-sm font-bold text-primary-dark-blue" aria-hidden="true">{studentInitial}</div>
-                  <div className="min-w-0">
+                  {avatarUrl ? <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-sm font-bold text-primary-dark-blue" aria-hidden="true">{studentInitial}</div>}
+                  <a href="/student/profile" className="min-w-0" onClick={() => setIsMenuOpen(false)} aria-label="Open student profile">
                     <p className="truncate text-sm font-bold text-primary-dark-blue">{studentName}</p>
                     <p className="truncate text-xs text-neutral-secondary-text">{student.email}</p>
-                  </div>
+                  </a>
                 </div>
                 <button type="button" onClick={handleSignOut} className="block w-full px-4 py-2 text-center text-primary-blue border-2 border-primary-blue rounded-lg font-semibold hover:bg-primary-blue hover:text-white transition-all duration-200">
                   Sign out

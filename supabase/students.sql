@@ -3,8 +3,12 @@ create table if not exists public.students (
   auth_user_id uuid not null unique references auth.users(id) on delete cascade,
   full_name text not null,
   email text not null unique,
+  photo_url text,
   created_at timestamptz not null default now()
 );
+
+alter table public.students
+  add column if not exists photo_url text;
 
 alter table public.students enable row level security;
 
@@ -38,6 +42,15 @@ drop policy if exists "Students can view profiles" on public.students;
 create policy "Students can view profiles"
   on public.students for select
   using (true);
+
+drop policy if exists "Students can update their own profile" on public.students;
+create policy "Students can update their own profile"
+  on public.students for update
+  to authenticated
+  using (auth_user_id = auth.uid())
+  with check (auth_user_id = auth.uid());
+
+grant update (full_name, photo_url) on public.students to authenticated;
 
 drop policy if exists "Admins can delete student profiles" on public.students;
 create policy "Admins can delete student profiles"
