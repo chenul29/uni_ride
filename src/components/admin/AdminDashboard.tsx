@@ -16,7 +16,7 @@ const navItems: { label: string; icon: IconName }[] = [
 const reports = [
   ['Admin Activity Report', 'A summary of actions performed in the portal.', 'K.A.S.S Wijethunga'],
   ['Student Wallet Activity Report', 'Top-ups and wallet balance activity by student.', 'Dineth Kausalya'],
-  ['Money Transaction Report', 'A detailed record of UniRide money movements.', 'B.L.T.T Liyanarathne'],
+  ['Money Transaction Report', 'A detailed record of UniRide money movements.', 'Thathsarani Liyanarathne'],
   ['Feedback Report', 'Student feedback and ratings.', 'W.M.C.D Warnasooriya'],
   ['Detailed Report about Ticket Distribution', 'Ticket sales and distribution by period.', 'Ramith Keshara'],
   ['Report about Student Login Activities', 'Student sign-in activity and usage patterns.', 'J.E Wijerathna'],
@@ -62,6 +62,7 @@ type TicketPurchase = {
   tickets: number
   payment_method: string
   amount: number
+  balance_after: number
   created_at: string
 }
 
@@ -222,8 +223,10 @@ function RoutePanel() {
 function ReportCard({ report, onDownload, downloading }: { report: string[]; onDownload?: (range: string) => void; downloading: boolean }) {
   const [range, setRange] = useState('Last 30 days')
   const isFeedbackReport = report[0] === 'Feedback Report'
+  const isMoneyTransactionReport = report[0] === 'Money Transaction Report'
+  const isDownloadable = isFeedbackReport || isMoneyTransactionReport
 
-  return <article className="report-card"><div className="report-title"><span className="report-icon"><AdminIcon name="reports" size={17} /></span><h3>{report[0]}</h3></div><p>{report[1]}</p><div className="report-owner"><span className="owner-avatar">{report[2].slice(0, 2)}</span><span><small>Owned by</small><strong>{report[2]}</strong></span></div><div className="report-controls"><select value={range} onChange={(event) => setRange(event.target.value)} aria-label={`${report[0]} date range`}><option>Last 30 days</option><option>This month</option><option>This year</option></select><select defaultValue="PDF" aria-label={`${report[0]} format`}><option>PDF</option><option>CSV</option></select><button className="download-button" disabled={!isFeedbackReport || downloading} onClick={() => onDownload?.(range)} title={isFeedbackReport ? 'Download feedback report as PDF' : 'Downloads will be connected later'}><AdminIcon name="download" size={16} /></button></div></article>
+  return <article className="report-card"><div className="report-title"><span className="report-icon"><AdminIcon name="reports" size={17} /></span><h3>{report[0]}</h3></div><p>{report[1]}</p><div className="report-owner"><span className="owner-avatar">{report[2].slice(0, 2)}</span><span><small>Owned by</small><strong>{report[2]}</strong></span></div><div className="report-controls"><select value={range} onChange={(event) => setRange(event.target.value)} aria-label={`${report[0]} date range`}><option>Last 30 days</option><option>This month</option><option>This year</option></select><select defaultValue="PDF" aria-label={`${report[0]} format`}><option>PDF</option><option>CSV</option></select><button type="button" className="download-button" disabled={!isDownloadable || downloading} onClick={() => onDownload?.(range)} title={isDownloadable ? `Download ${report[0]} as PDF` : 'Downloads will be connected later'}><AdminIcon name="download" size={16} /></button></div></article>
 }
 
 function drawPdfTemplate(pdf: PDFKit.PDFDocument, pageNumber: number) {
@@ -269,6 +272,8 @@ export function AdminDashboard() {
   const [ticketsError, setTicketsError] = useState('')
   const [feedbackReportLoading, setFeedbackReportLoading] = useState(false)
   const [feedbackReportError, setFeedbackReportError] = useState('')
+  const [moneyReportLoading, setMoneyReportLoading] = useState(false)
+  const [moneyReportError, setMoneyReportError] = useState('')
 
   useEffect(() => {
     if (!supabase) {
@@ -459,6 +464,118 @@ export function AdminDashboard() {
     }
   }
 
+  const downloadMoneyTransactionReport = async (range: string) => {
+    setMoneyReportError('')
+    if (!supabase) {
+      setMoneyReportError('Supabase is not configured.')
+      return
+    }
+
+    setMoneyReportLoading(true)
+    try {
+      const now = new Date()
+      const from = range === 'Last 30 days'
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)
+        : range === 'This month'
+          ? new Date(now.getFullYear(), now.getMonth(), 1)
+          : new Date(now.getFullYear(), 0, 1)
+      const [walletResult, transactionResult, studentResult] = await Promise.all([
+        supabase.from('wallet').select('id, student_id, amount, created_at').order('created_at', { ascending: false }),
+        supabase.from('wallet_transactions')
+          .select('id, student_id, booking_token, route, tickets, payment_method, amount, balance_after, status, created_at')
+          .gte('created_at', from.toISOString())
+          .order('created_at', { ascending: false }),
+        supabase.from('students').select('id, full_name, email'),
+      ])
+
+      if (walletResult.error) throw walletResult.error
+      if (transactionResult.error) throw transactionResult.error
+      if (studentResult.error) throw studentResult.error
+
+      const wallets = (walletResult.data || []) as WalletTopUp[]
+      const transactions = (transactionResult.data || []) as (TicketPurchase & { status: string })[]
+      const studentNames = new Map((studentResult.data || []).map((student) => [student.id, student.full_name]))
+      const totalWalletBalance = wallets.reduce((total, wallet) => total + Number(wallet.amount), 0)
+      const totalTransactionAmount = transactions.reduce((total, transaction) => total + Number(transaction.amount), 0)
+      const registerStdFonts = (pdfKitModule as unknown as { registerStdFonts: (fontData: unknown) => void }).registerStdFonts
+      registerStdFonts(Helvetica)
+      const chunks: Uint8Array[] = []
+      let pageNumber = 0
+      const pdf = new PDFDocument({ margin: 48, size: 'A4', autoFirstPage: false })
+      pdf.on('data', (chunk: Uint8Array) => chunks.push(chunk))
+      const addReportPage = () => {
+        pageNumber += 1
+        pdf.addPage()
+        drawPdfTemplate(pdf, pageNumber)
+      }
+      addReportPage()
+      const pdfReady = new Promise<void>((resolve, reject) => {
+        pdf.on('end', () => resolve())
+        pdf.on('error', reject)
+      })
+
+      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text('Money Transaction Report', { width: 500 })
+      pdf.fontSize(10).fillColor('#475569').text(`Period: ${range}`, { width: 500 })
+      pdf.text(`Generated: ${now.toLocaleString()}`, { width: 500 })
+      pdf.text('Prepared by: Thathsarani Liyanarathne', { width: 500 })
+      pdf.moveDown()
+      pdf.fontSize(11).fillColor('#1e293b').text(`Current wallets: ${wallets.length} | Combined balance: LKR ${totalWalletBalance.toFixed(2)}`, { width: 500 })
+      pdf.text(`Ticket transactions in period: ${transactions.length} | Total spent: LKR ${totalTransactionAmount.toFixed(2)}`, { width: 500 })
+      pdf.moveDown()
+
+      const ensureReportSpace = (required: number) => {
+        if (pdf.y + required > pdf.page.height - 75) addReportPage()
+      }
+      pdf.fontSize(13).fillColor('#1e3a8a').text('Current Wallet Balances', { width: 500 })
+      pdf.moveDown(.5)
+      if (wallets.length === 0) {
+        pdf.fontSize(10).fillColor('#475569').text('No wallet records were found.', { width: 500 })
+      } else {
+        wallets.forEach((wallet) => {
+          ensureReportSpace(44)
+          pdf.fontSize(10).fillColor('#1e293b').text(studentNames.get(wallet.student_id) || 'Unknown student', { width: 500 })
+          pdf.fontSize(9).fillColor('#475569').text(`Balance: LKR ${Number(wallet.amount).toFixed(2)} | Wallet record created: ${new Date(wallet.created_at).toLocaleString()}`, { width: 500 })
+          pdf.moveDown(.6)
+        })
+      }
+
+      ensureReportSpace(45)
+      pdf.moveDown(.4)
+      pdf.fontSize(13).fillColor('#1e3a8a').text(`Ticket Transactions (${range})`, { width: 500 })
+      pdf.moveDown(.5)
+      if (transactions.length === 0) {
+        pdf.fontSize(10).fillColor('#475569').text('No ticket transactions were recorded during this period.', { width: 500 })
+      } else {
+        transactions.forEach((transaction, index) => {
+          ensureReportSpace(70)
+          pdf.fontSize(10).fillColor('#1e293b').text(`${index + 1}. ${studentNames.get(transaction.student_id || '') || 'Guest or unavailable student'} | LKR ${Number(transaction.amount).toFixed(2)} | ${transaction.status}`, { width: 500 })
+          pdf.fontSize(9).fillColor('#475569').text(`${new Date(transaction.created_at).toLocaleString()} | ${transaction.route} | ${transaction.tickets} ticket(s) | ${transaction.payment_method}`, { width: 500 })
+          pdf.text(`Booking: ${transaction.booking_token} | Balance after: LKR ${Number(transaction.balance_after).toFixed(2)}`, { width: 500 })
+          pdf.moveDown(.6)
+        })
+      }
+      pdf.end()
+      await pdfReady
+
+      const blobParts = chunks.map((chunk) => {
+        const copy = new Uint8Array(chunk.byteLength)
+        copy.set(chunk)
+        return copy.buffer as ArrayBuffer
+      })
+      const blob = new Blob(blobParts, { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `uniride-money-transaction-report-${new Date().toISOString().slice(0, 10)}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setMoneyReportError(error instanceof Error ? error.message : 'Unable to generate the money transaction report.')
+    } finally {
+      setMoneyReportLoading(false)
+    }
+  }
+
   return <div className="admin-shell">
     <aside className={`admin-sidebar ${menuOpen ? 'admin-sidebar-open' : ''}`}><div className="admin-brand"><div className="brand-mark">U</div><div><strong>UniRide</strong><span>Admin Portal</span></div><button className="sidebar-close" onClick={() => setMenuOpen(false)} aria-label="Close navigation"><AdminIcon name="close" /></button></div><nav>{navItems.map((item, index) => <a className={index === 0 ? 'active' : ''} href={`#${item.label.toLowerCase()}`} key={item.label} onClick={() => setMenuOpen(false)}><AdminIcon name={item.icon} /><span>{item.label}</span></a>)}</nav><button className="logout-button"><AdminIcon name="logout" /><span>Logout</span></button></aside>
     {menuOpen && <button className="admin-overlay" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
@@ -471,7 +588,7 @@ export function AdminDashboard() {
         <StudentsPanel students={students} loading={studentsLoading} error={studentsError} onDelete={deleteStudent} />
         <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? 'Supabase connected' : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
         <div className="analytics-grid"><TicketSalesChart /><VerificationChart /></div><div className="lower-grid"><ActivityFeed /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
-        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p></div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div>{feedbackReportError && <p className="database-status database-status-error" role="alert">{feedbackReportError}</p>}<div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={downloadFeedbackReport} downloading={feedbackReportLoading} />)}</div></section>
+        <section id="reports" className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p></div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div>{feedbackReportError && <p className="database-status database-status-error" role="alert">{feedbackReportError}</p>}{moneyReportError && <p className="database-status database-status-error" role="alert">{moneyReportError}</p>}<div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Money Transaction Report' ? downloadMoneyTransactionReport : downloadFeedbackReport} downloading={report[0] === 'Money Transaction Report' ? moneyReportLoading : feedbackReportLoading} />)}</div></section>
         
         {/* Admin Management Module */}
         <AdminManagement />
