@@ -48,6 +48,26 @@ type WalletTransaction = {
   created_at: string
 }
 
+type WalletTopUp = {
+  id: string
+  student_id: string
+  amount: number
+  created_at: string
+}
+
+type TicketPurchase = {
+  id: string
+  student_id: string | null
+  booking_token: string
+  route: string
+  tickets: number
+  payment_method: string
+  amount: number
+  balance_after: number
+  status: string
+  created_at: string
+}
+
 function Panel({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
   return <section className={`admin-panel ${className}`}><div className="admin-panel-heading"><h2>{title}</h2><button className="admin-text-button">View all <span aria-hidden="true">-&gt;</span></button></div>{children}</section>
 }
@@ -83,6 +103,10 @@ function TransactionStatusChart({ transactions }: { transactions: TicketPurchase
   }
 
   return <Panel title="Transaction Status" className="verification-panel"><div className="verification-summary"><div className="donut-chart" style={chartStyle}><div><strong>{total}</strong><small>Transactions</small></div></div><div className="verification-legend"><span><i className="legend-valid" />Completed <b>{completed}</b></span><span><i className="legend-invalid" />Pending <b>{pending}</b></span><span><i className="legend-used" />Other <b>{other}</b></span></div></div></Panel>
+}
+
+function VerificationChart({ transactions }: { transactions: TicketPurchase[] }) {
+  return <TransactionStatusChart transactions={transactions} />
 }
 
 function ActivityFeed({ students, feedback, transactions }: { students: Student[]; feedback: Feedback[]; transactions: TicketPurchase[] }) {
@@ -272,8 +296,20 @@ export function AdminDashboard() {
   const [feedback, setFeedback] = useState<Feedback[]>([])
   const [feedbackLoading, setFeedbackLoading] = useState(true)
   const [feedbackError, setFeedbackError] = useState('')
+  const [walletTopUps, setWalletTopUps] = useState<WalletTopUp[]>([])
+  const [walletLoading, setWalletLoading] = useState(true)
+  const [walletError, setWalletError] = useState('')
+  const [ticketPurchases, setTicketPurchases] = useState<TicketPurchase[]>([])
+  const [ticketsLoading, setTicketsLoading] = useState(true)
+  const [ticketsError, setTicketsError] = useState('')
+  const [realtimeStatus, setRealtimeStatus] = useState<'live' | 'unavailable'>('unavailable')
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false)
+  const [editingTopUp, setEditingTopUp] = useState<WalletTopUp | null>(null)
   const [walletReportLoading, setWalletReportLoading] = useState(false)
   const [walletReportError, setWalletReportError] = useState('')
+
+  const totalTicketsSold = ticketPurchases.reduce((total, purchase) => total + Number(purchase.tickets), 0)
+  const totalWalletBalance = walletTopUps.reduce((total, wallet) => total + Number(wallet.amount), 0)
 
   useEffect(() => {
     if (!supabase) {
@@ -370,6 +406,16 @@ export function AdminDashboard() {
     setFeedback((currentFeedback) => currentFeedback.filter(({ id }) => id !== item.id))
   }
 
+  const handleTopUpSaved = (topUp: WalletTopUp) => {
+    setWalletTopUps((currentTopUps) => [topUp, ...currentTopUps])
+    setIsTopUpOpen(false)
+  }
+
+  const handleTopUpUpdated = (updatedTopUp: WalletTopUp) => {
+    setWalletTopUps((currentTopUps) => currentTopUps.map((topUp) => topUp.id === updatedTopUp.id ? updatedTopUp : topUp))
+    setEditingTopUp(null)
+  }
+
   const downloadWalletActivityReport = async (range: string) => {
     setWalletReportError('')
     if (!supabase) {
@@ -462,8 +508,8 @@ export function AdminDashboard() {
         <WalletTopUpsPanel topUps={walletTopUps} students={students} loading={walletLoading} error={walletError} onOpenTopUp={() => setIsTopUpOpen(true)} onEditTopUp={setEditingTopUp} />
         <PurchasedTicketsPanel purchases={ticketPurchases} students={students} loading={ticketsLoading} error={ticketsError} />
         <StudentsPanel students={students} loading={studentsLoading} error={studentsError} onDelete={deleteStudent} />
-        <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? 'Supabase connected' : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
-        <div className="analytics-grid"><TicketSalesChart /><VerificationChart /></div><div className="lower-grid"><ActivityFeed /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
+        <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? `Supabase connected · Realtime ${realtimeStatus}` : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
+        <div className="analytics-grid"><TicketSalesChart transactions={ticketPurchases} /><VerificationChart transactions={ticketPurchases} /></div><div className="lower-grid"><ActivityFeed students={students} feedback={feedback} transactions={ticketPurchases} /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
         <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p>{walletReportError && <p className="database-status database-status-error" role="alert">{walletReportError}</p>}</div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Student Wallet Activity Report' ? downloadWalletActivityReport : undefined} downloading={walletReportLoading} />)}</div></section>
         
         {/* Admin Management Module */}
