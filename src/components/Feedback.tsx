@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase'
 
 interface Testimonial {
   id: string
+  authUserId: string | null
   initials: string
   name: string
   affiliation: string
@@ -17,7 +18,11 @@ interface Testimonial {
   rating: number
 }
 
-function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
+function TestimonialCard({ testimonial, canEdit, onEdit }: {
+  testimonial: Testimonial
+  canEdit: boolean
+  onEdit: (testimonial: Testimonial) => void
+}) {
   return (
     <div className="bg-white border border-neutral-border rounded-xl p-6 sm:p-8 hover:border-primary-blue hover:shadow-lg transition-all duration-300">
       {/* Star Rating */}
@@ -35,17 +40,28 @@ function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
       </p>
 
       {/* Avatar and Student Info */}
-      <div className="flex items-center gap-4">
-        {/* Avatar Circle with Initials */}
-        <div className="w-12 h-12 bg-gradient-to-br from-primary-blue to-primary-dark-blue rounded-full flex items-center justify-center">
-          <span className="text-white font-bold text-sm">{testimonial.initials}</span>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          {/* Avatar Circle with Initials */}
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-blue to-primary-dark-blue">
+            <span className="text-sm font-bold text-white">{testimonial.initials}</span>
+          </div>
 
-        {/* Student Name and Affiliation */}
-        <div>
-          <p className="font-semibold text-neutral-main-text">{testimonial.name}</p>
-          <p className="text-sm text-neutral-secondary-text">{testimonial.affiliation}</p>
+          {/* Student Name and Affiliation */}
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-neutral-main-text">{testimonial.name}</p>
+            <p className="truncate text-sm text-neutral-secondary-text">{testimonial.affiliation}</p>
+          </div>
         </div>
+        {canEdit && (
+          <button
+            type="button"
+            className="rounded-lg border border-primary-blue px-3 py-2 text-sm font-semibold text-primary-blue transition hover:bg-primary-blue hover:text-white"
+            onClick={() => onEdit(testimonial)}
+          >
+            Edit
+          </button>
+        )}
       </div>
     </div>
   )
@@ -60,6 +76,8 @@ export function Feedback() {
   const [rating, setRating] = useState(5)
   const [isSaving, setIsSaving] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [authUserId, setAuthUserId] = useState<string | null>(null)
+  const [editingFeedback, setEditingFeedback] = useState<Testimonial | null>(null)
 
   const loadRecentFeedback = async () => {
     if (!supabase) {
@@ -70,7 +88,7 @@ export function Feedback() {
 
     const { data, error } = await supabase
       .from('feedback')
-      .select('id, student_name, feedback, rating')
+      .select('id, auth_user_id, student_name, feedback, rating')
       .order('created_at', { ascending: false })
       .limit(3)
 
@@ -89,6 +107,7 @@ export function Feedback() {
 
       return {
         id: item.id,
+        authUserId: item.auth_user_id,
         initials,
         name: item.student_name,
         affiliation: 'SLIIT Student',
@@ -103,7 +122,19 @@ export function Feedback() {
   }
 
   useEffect(() => {
+    if (!supabase) {
+      loadRecentFeedback()
+      return
+    }
+
+    const client = supabase
+    client.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null))
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+      setAuthUserId(session?.user?.id ?? null)
+    })
+
     loadRecentFeedback()
+    return () => authListener.subscription.unsubscribe()
   }, [])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -118,21 +149,63 @@ export function Feedback() {
     const formData = new FormData(event.currentTarget)
     setIsSaving(true)
 
-    const { error } = await supabase.from('feedback').insert({
-      student_name: formData.get('studentName'),
-      feedback: formData.get('feedback'),
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      setIsSaving(false)
+      console.error('Could not identify the signed-in student:', userError)
+      setSubmitError(`Could not verify your account: ${userError.message}`)
+      return
+    }
+
+    const currentUserId = userData.user?.id ?? null
+    if (!currentUserId) {
+      setIsSaving(false)
+      setSubmitError('Please sign in before submitting or editing feedback.')
+      return
+    }
+
+    if (editingFeedback && editingFeedback.authUserId !== currentUserId) {
+      setIsSaving(false)
+      setSubmitError('You can only edit feedback submitted from your signed-in account.')
+      return
+    }
+
+    const feedbackData = {
+      student_name: String(formData.get('studentName') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
       rating,
-    })
+    }
+    const query = editingFeedback
+      ? supabase
+        .from('feedback')
+        .update(feedbackData)
+        .eq('id', editingFeedback.id)
+        .eq('auth_user_id', currentUserId)
+        .select('id')
+      : supabase
+        .from('feedback')
+        .insert({ ...feedbackData, auth_user_id: currentUserId })
+    const { data: savedFeedback, error } = await query
 
     setIsSaving(false)
 
-    if (error) {
-      setSubmitError('We could not save your feedback. Please try again.')
+    if (error || (editingFeedback && !savedFeedback?.length)) {
+      const errorMessage = error?.message || 'No feedback row was updated.'
+      console.error('Could not save feedback:', error || errorMessage)
+      setSubmitError(
+        editingFeedback && !error
+          ? 'This feedback is not linked to your signed-in account. Submit a new feedback entry while signed in, or link this old entry in Supabase.'
+          : `Could not save feedback: ${errorMessage}`,
+      )
       return
     }
 
     await loadRecentFeedback()
-    setIsSubmitted(true)
+    if (editingFeedback) {
+      closeForm()
+    } else {
+      setIsSubmitted(true)
+    }
   }
 
   const closeForm = () => {
@@ -140,6 +213,15 @@ export function Feedback() {
     setIsSubmitted(false)
     setRating(5)
     setSubmitError('')
+    setEditingFeedback(null)
+  }
+
+  const openEditForm = (testimonial: Testimonial) => {
+    setEditingFeedback(testimonial)
+    setRating(testimonial.rating)
+    setSubmitError('')
+    setIsSubmitted(false)
+    setIsFormOpen(true)
   }
 
   return (
@@ -170,7 +252,12 @@ export function Feedback() {
             <p className="col-span-full text-center text-neutral-secondary-text">No feedback has been submitted yet.</p>
           )}
           {!isLoading && !loadError && testimonials.map((testimonial) => (
-            <TestimonialCard key={testimonial.id} testimonial={testimonial} />
+            <TestimonialCard
+              key={testimonial.id}
+              testimonial={testimonial}
+              canEdit={Boolean(authUserId && testimonial.authUserId === authUserId)}
+              onEdit={openEditForm}
+            />
           ))}
         </div>
 
@@ -228,17 +315,22 @@ export function Feedback() {
               <>
                 <div className="mb-6 pr-8">
                   <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary-blue">Student feedback</p>
-                  <h2 id="feedback-form-title" className="text-2xl font-bold text-neutral-main-text">Share your experience</h2>
-                  <p className="mt-2 text-sm text-neutral-secondary-text">Tell us how UniRide is working for you.</p>
+                  <h2 id="feedback-form-title" className="text-2xl font-bold text-neutral-main-text">
+                    {editingFeedback ? 'Edit your feedback' : 'Share your experience'}
+                  </h2>
+                  <p className="mt-2 text-sm text-neutral-secondary-text">
+                    {editingFeedback ? 'Update your experience with UniRide.' : 'Tell us how UniRide is working for you.'}
+                  </p>
                 </div>
 
-                <form className="grid gap-5" onSubmit={handleSubmit}>
+                <form key={editingFeedback?.id ?? 'new-feedback'} className="grid gap-5" onSubmit={handleSubmit}>
                   <label className="grid gap-2 text-sm font-semibold text-slate-700">
                     Student name
                     <input
                       className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-normal outline-none focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/20"
                       name="studentName"
                       placeholder="Enter your name"
+                      defaultValue={editingFeedback?.name}
                       required
                     />
                   </label>
@@ -248,6 +340,7 @@ export function Feedback() {
                       className="min-h-28 resize-y rounded-lg border border-slate-300 px-3 py-3 text-sm font-normal outline-none focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/20"
                       name="feedback"
                       placeholder="What do you think about UniRide?"
+                      defaultValue={editingFeedback?.feedback}
                       required
                     />
                   </label>
@@ -269,7 +362,7 @@ export function Feedback() {
                   </fieldset>
                   {submitError && <p className="text-sm text-red-600" role="alert">{submitError}</p>}
                   <button type="submit" disabled={isSaving} className="rounded-lg bg-primary-blue py-3 font-semibold text-white hover:bg-primary-dark-blue disabled:cursor-not-allowed disabled:opacity-60">
-                    {isSaving ? 'Saving feedback...' : 'Submit feedback'}
+                    {isSaving ? 'Saving feedback...' : editingFeedback ? 'Save changes' : 'Submit feedback'}
                   </button>
                 </form>
               </>
