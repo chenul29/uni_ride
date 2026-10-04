@@ -79,6 +79,16 @@ export function Navbar() {
                 Easy travel for students
               </p>
             </div>
+            <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-neutral-border">
+              <img
+                src="https://www.sliit.lk/build/assets/images/logo.svg"
+                alt="SLIIT Kandy Campus"
+                className="h-9 w-auto"
+              />
+              <span className="hidden lg:block text-[10px] font-semibold leading-tight text-neutral-secondary-text uppercase tracking-wide">
+                Kandy<br />Campus
+              </span>
+            </div>
           </div>
 
           {/* Navigation Links - Desktop */}
