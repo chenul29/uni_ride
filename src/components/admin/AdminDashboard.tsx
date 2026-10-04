@@ -1,4 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
+import PDFDocument from 'pdfkit'
+import * as pdfKitModule from 'pdfkit'
+import Helvetica from 'pdfkit/standard-fonts/Helvetica'
 import { AdminIcon } from './AdminIcon'
 import { supabase } from '../../lib/supabase'
 import { AdminManagement } from './AdminManagement'
@@ -41,6 +44,17 @@ type Feedback = {
   student_name: string
   feedback: string
   rating: number
+  created_at: string
+}
+
+type WalletTransaction = {
+  booking_token: string
+  route: string
+  tickets: number
+  payment_method: string
+  amount: number
+  balance_after: number
+  status: string
   created_at: string
 }
 
@@ -198,8 +212,35 @@ function RoutePanel() {
   </section>
 }
 
-function ReportCard({ report }: { report: string[] }) {
-  return <article className="report-card"><div className="report-title"><span className="report-icon"><AdminIcon name="reports" size={17} /></span><h3>{report[0]}</h3></div><p>{report[1]}</p><div className="report-owner"><span className="owner-avatar">{report[2].slice(0, 2)}</span><span><small>Owned by</small><strong>{report[2]}</strong></span></div><div className="report-controls"><select defaultValue="Last 30 days" aria-label={`${report[0]} date range`}><option>Last 30 days</option><option>This month</option><option>This year</option></select><select defaultValue="PDF" aria-label={`${report[0]} format`}><option>PDF</option><option>CSV</option></select><button className="download-button" disabled title="Downloads will be connected later"><AdminIcon name="download" size={16} /></button></div></article>
+function ReportCard({ report, onDownload, downloading }: { report: string[]; onDownload?: (range: string) => void; downloading: boolean }) {
+  const [range, setRange] = useState('Last 30 days')
+  const supportsPdfDownload = Boolean(onDownload)
+
+  return <article className="report-card"><div className="report-title"><span className="report-icon"><AdminIcon name="reports" size={17} /></span><h3>{report[0]}</h3></div><p>{report[1]}</p><div className="report-owner"><span className="owner-avatar">{report[2].slice(0, 2)}</span><span><small>Owned by</small><strong>{report[2]}</strong></span></div><div className="report-controls"><select value={range} onChange={(event) => setRange(event.target.value)} aria-label={`${report[0]} date range`}><option>Last 30 days</option><option>This month</option><option>This year</option></select><select defaultValue="PDF" aria-label={`${report[0]} format`}><option>PDF</option><option>CSV</option></select><button className="download-button" type="button" onClick={() => onDownload?.(range)} disabled={!supportsPdfDownload || downloading} title={supportsPdfDownload ? 'Download PDF' : 'Downloads will be connected later'} aria-label={supportsPdfDownload ? `Download ${report[0]} as PDF` : `${report[0]} download unavailable`}><AdminIcon name="download" size={16} /></button></div></article>
+}
+
+function drawPdfTemplate(pdf: PDFKit.PDFDocument, pageNumber: number) {
+  const pageWidth = pdf.page.width
+  const pageHeight = pdf.page.height
+  const left = 34
+  const right = pageWidth - 34
+  const top = 30
+  const bottom = pageHeight - 30
+
+  pdf.save()
+  pdf.lineWidth(1).strokeColor('#cbd5e1').rect(left, top, pageWidth - 68, pageHeight - 60).stroke()
+  pdf.lineWidth(2).strokeColor('#2563eb').moveTo(left, top).lineTo(right, top).stroke()
+  pdf.roundedRect(left + 16, top + 14, 30, 30, 6).fillColor('#2563eb').fill()
+  pdf.fontSize(18).fillColor('#ffffff').text('U', left + 24, top + 18, { lineBreak: false })
+  pdf.fontSize(11).fillColor('#1e3a8a').text('SLIIT UNIVERSITY', left + 56, top + 13, { lineBreak: false })
+  pdf.fontSize(8).fillColor('#64748b').text('UniRide Administration Portal', left + 56, top + 29, { lineBreak: false })
+  pdf.moveTo(left + 16, top + 58).lineTo(right - 16, top + 58).lineWidth(.5).strokeColor('#e2e8f0').stroke()
+  pdf.moveTo(left + 16, bottom - 25).lineTo(right - 16, bottom - 25).stroke()
+  pdf.fontSize(8).fillColor('#64748b').text('SLIIT University | UniRide Admin Portal', left + 16, bottom - 18, { lineBreak: false })
+  pdf.text(`Page ${pageNumber}`, right - 55, bottom - 18, { width: 55, align: 'right', lineBreak: false })
+  pdf.restore()
+  pdf.x = 48
+  pdf.y = top + 78
 }
 
 export function AdminDashboard() {
@@ -211,6 +252,8 @@ export function AdminDashboard() {
   const [feedback, setFeedback] = useState<Feedback[]>([])
   const [feedbackLoading, setFeedbackLoading] = useState(true)
   const [feedbackError, setFeedbackError] = useState('')
+  const [walletReportLoading, setWalletReportLoading] = useState(false)
+  const [walletReportError, setWalletReportError] = useState('')
 
   useEffect(() => {
     if (!supabase) {
@@ -277,6 +320,88 @@ export function AdminDashboard() {
     setFeedback((currentFeedback) => currentFeedback.filter(({ id }) => id !== item.id))
   }
 
+  const downloadWalletActivityReport = async (range: string) => {
+    setWalletReportError('')
+    if (!supabase) {
+      setWalletReportError('Supabase is not configured.')
+      return
+    }
+
+    setWalletReportLoading(true)
+    try {
+      const now = new Date()
+      const from = range === 'Last 30 days'
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)
+        : range === 'This month'
+          ? new Date(now.getFullYear(), now.getMonth(), 1)
+          : new Date(now.getFullYear(), 0, 1)
+      const { data, error } = await supabase
+        .from('wallet_transactions')
+        .select('booking_token, route, tickets, payment_method, amount, balance_after, status, created_at')
+        .gte('created_at', from.toISOString())
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      const transactions = (data || []) as WalletTransaction[]
+      const registerStdFonts = (pdfKitModule as unknown as { registerStdFonts: (fontData: unknown) => void }).registerStdFonts
+      registerStdFonts(Helvetica)
+      const chunks: Uint8Array[] = []
+      let pageNumber = 0
+      const pdf = new PDFDocument({ margin: 48, size: 'A4', autoFirstPage: false })
+      pdf.on('data', (chunk: Uint8Array) => chunks.push(chunk))
+      const addReportPage = () => {
+        pageNumber += 1
+        pdf.addPage()
+        drawPdfTemplate(pdf, pageNumber)
+      }
+      addReportPage()
+      const pdfReady = new Promise<void>((resolve, reject) => {
+        pdf.on('end', () => resolve())
+        pdf.on('error', reject)
+      })
+
+      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text('Student Wallet Activity Report', { width: 500 })
+      pdf.fontSize(10).fillColor('#475569').text(`Period: ${range}`, { width: 500 })
+      pdf.text(`Generated: ${now.toLocaleString()}`, { width: 500 })
+      pdf.moveDown()
+      pdf.fontSize(11).fillColor('#1e293b').text(`Transactions in period: ${transactions.length}`, { width: 500 })
+      pdf.text(`Total transaction value: LKR ${transactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0).toFixed(2)}`, { width: 500 })
+      pdf.moveDown()
+
+      if (transactions.length === 0) {
+        pdf.fontSize(10).fillColor('#475569').text('No wallet transactions were recorded during this period.', { width: 500 })
+      } else {
+        transactions.forEach((transaction, index) => {
+          if (pdf.y > pdf.page.height - 125) addReportPage()
+          pdf.fontSize(11).fillColor('#1e293b').text(`${index + 1}. ${transaction.route} | LKR ${Number(transaction.amount).toFixed(2)} | ${transaction.status}`, { width: 500 })
+          pdf.fontSize(9).fillColor('#475569').text(`${new Date(transaction.created_at).toLocaleString()} | ${transaction.tickets} ticket(s) | ${transaction.payment_method}`, { width: 500 })
+          pdf.text(`Booking: ${transaction.booking_token} | Balance after: LKR ${Number(transaction.balance_after).toFixed(2)}`, { width: 500 })
+          pdf.moveDown(.6)
+        })
+      }
+
+      pdf.end()
+      await pdfReady
+      const blobParts = chunks.map((chunk) => {
+        const copy = new Uint8Array(chunk.byteLength)
+        copy.set(chunk)
+        return copy.buffer as ArrayBuffer
+      })
+      const blob = new Blob(blobParts, { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `uniride-student-wallet-activity-${now.toISOString().slice(0, 10)}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setWalletReportError(error instanceof Error ? error.message : 'Unable to generate the wallet activity report.')
+    } finally {
+      setWalletReportLoading(false)
+    }
+  }
+
   return <div className="admin-shell">
     <aside className={`admin-sidebar ${menuOpen ? 'admin-sidebar-open' : ''}`}><div className="admin-brand"><div className="brand-mark">U</div><div><strong>UniRide</strong><span>Admin Portal</span></div><button className="sidebar-close" onClick={() => setMenuOpen(false)} aria-label="Close navigation"><AdminIcon name="close" /></button></div><nav>{navItems.map((item, index) => <a className={index === 0 ? 'active' : ''} href={`#${item.label.toLowerCase()}`} key={item.label} onClick={() => setMenuOpen(false)}><AdminIcon name={item.icon} /><span>{item.label}</span></a>)}</nav><button className="logout-button"><AdminIcon name="logout" /><span>Logout</span></button></aside>
     {menuOpen && <button className="admin-overlay" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
@@ -287,7 +412,7 @@ export function AdminDashboard() {
         <StudentsPanel students={students} loading={studentsLoading} error={studentsError} onDelete={deleteStudent} />
         <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? 'Supabase connected' : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
         <div className="analytics-grid"><TicketSalesChart /><VerificationChart /></div><div className="lower-grid"><ActivityFeed /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
-        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p></div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} />)}</div></section>
+        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p>{walletReportError && <p className="database-status database-status-error" role="alert">{walletReportError}</p>}</div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Student Wallet Activity Report' ? downloadWalletActivityReport : undefined} downloading={walletReportLoading} />)}</div></section>
         
         {/* Admin Management Module */}
         <AdminManagement />

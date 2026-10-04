@@ -12,11 +12,13 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
     "html5-qrcode": "^2.3.8",
+    "pdfkit": "^0.20.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
+    "@types/pdfkit": "^0.17.6",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
     "@vitejs/plugin-react": "^4.2.0",

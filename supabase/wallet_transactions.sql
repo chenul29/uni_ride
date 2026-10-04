@@ -21,3 +21,10 @@ create policy "Allow wallet transaction inserts"
   for insert
   to anon, authenticated
   with check (true);
+
+drop policy if exists "Admins can view wallet transactions" on public.wallet_transactions;
+create policy "Admins can view wallet transactions"
+  on public.wallet_transactions
+  for select
+  to anon, authenticated
+  using (true);
