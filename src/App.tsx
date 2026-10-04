@@ -12,6 +12,7 @@ import { ConductorVerification } from './components/ConductorVerification'
 import { StudentWallet } from './components/StudentWallet'
 import { PurchasedTickets } from './components/PurchasedTickets'
 import StudentLogin from './components/studnet/StudentLogin'
+import { LiveBusLauncher, LiveBusTracking } from './components/LiveBusTracking'
 import { supabase } from './lib/supabase'
 
 type PurchasedTicket = {
@@ -279,6 +280,10 @@ if (window.location.pathname === '/conductor') {
     return <StudentLogin mode="register" />
   }
 
+  if (window.location.pathname === '/tracking') {
+    return <LiveBusTracking />
+  }
+
   return (
     <div className="w-full min-h-screen bg-white">
       <Navbar />
@@ -297,6 +302,7 @@ if (window.location.pathname === '/conductor') {
         <Feedback />
       </main>
       <Footer />
+      <LiveBusLauncher />
       {checkoutOpen && (
         <TicketCheckout
           onClose={() => setCheckoutOpen(false)}
