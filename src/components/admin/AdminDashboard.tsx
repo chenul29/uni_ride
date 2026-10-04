@@ -16,21 +16,11 @@ const navItems: { label: string; icon: IconName }[] = [
 const reports = [
   ['Admin Activity Report', 'A summary of actions performed in the portal.', 'K.A.S.S Wijethunga'],
   ['Student Wallet Activity Report', 'Top-ups and wallet balance activity by student.', 'Dineth Kausalya'],
-  ['Money Transaction Report', 'A detailed record of UniRide money movements.', 'B.L.T.T Liyanarathne'],
-  ['Conductor Verified Ticket Details Report', 'Verified ticket details across all routes.', 'W.M.C.D Warnasooriya'],
+  ['Money Transaction Report', 'A detailed record of UniRide money movements.', 'Thathsarani Liyanarathne'],
+  ['Feedback Report', 'Student feedback and ratings.', 'W.M.C.D Warnasooriya'],
   ['Detailed Report about Ticket Distribution', 'Ticket sales and distribution by period.', 'Ramith Keshara'],
   ['Report about Student Login Activities', 'Student sign-in activity and usage patterns.', 'J.E Wijerathna'],
 ]
-
-const activities = [
-  ['wallet', 'Wallet Top-Up', 'Student wallet topped up by LKR 1,000.', '5 minutes ago'],
-  ['check', 'Ticket Verified', 'Ticket #UR10284 verified by conductor.', '18 minutes ago'],
-  ['feedback', 'New Feedback', 'A student submitted a 4-star feedback.', '32 minutes ago'],
-  ['ticket', 'Ticket Purchased', 'A new university bus ticket was purchased.', '1 hour ago'],
-] as const
-
-const sales = [42, 51, 38, 64, 72, 35, 26]
-const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 type Student = {
   id: string
@@ -62,17 +52,47 @@ function Panel({ title, children, className = '' }: { title: string; children: R
   return <section className={`admin-panel ${className}`}><div className="admin-panel-heading"><h2>{title}</h2><button className="admin-text-button">View all <span aria-hidden="true">-&gt;</span></button></div>{children}</section>
 }
 
-function TicketSalesChart() {
-  const max = Math.max(...sales)
-  return <Panel title="Ticket Sales Overview" className="sales-panel"><div className="bar-chart" aria-label="Ticket sales for the last seven days">{sales.map((sale, index) => <div className="bar-column" key={days[index]}><span>{sale}</span><div className="bar-track"><div className="bar-fill" style={{ height: `${(sale / max) * 100}%` }} /></div><small>{days[index]}</small></div>)}</div></Panel>
+function TicketSalesChart({ transactions }: { transactions: TicketPurchase[] }) {
+  const today = new Date()
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (6 - index))
+    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+    const count = transactions.reduce((total, transaction) => {
+      const purchased = new Date(transaction.created_at)
+      const purchasedKey = `${purchased.getFullYear()}-${purchased.getMonth()}-${purchased.getDate()}`
+      return total + (purchasedKey === key ? Number(transaction.tickets) : 0)
+    }, 0)
+    return { key, label: date.toLocaleDateString(undefined, { weekday: 'short' }), count }
+  })
+  const max = Math.max(1, ...days.map(({ count }) => count))
+
+  return <Panel title="Tickets Sold · Last 7 Days" className="sales-panel"><div className="bar-chart" aria-label="Database ticket sales for the last seven days">{days.map(({ key, label, count }) => <div className="bar-column" key={key}><span>{count}</span><div className="bar-track"><div className="bar-fill" style={{ height: `${(count / max) * 100}%` }} /></div><small>{label}</small></div>)}</div></Panel>
 }
 
-function VerificationChart() {
-  return <Panel title="Verification Breakdown" className="verification-panel"><div className="verification-summary"><div className="donut-chart"><div><strong>328</strong><small>Total</small></div></div><div className="verification-legend"><span><i className="legend-valid" />Valid <b>285</b></span><span><i className="legend-invalid" />Invalid <b>18</b></span><span><i className="legend-used" />Already Used <b>25</b></span></div></div></Panel>
+function TransactionStatusChart({ transactions }: { transactions: TicketPurchase[] }) {
+  const completed = transactions.filter(({ status }) => status.toLowerCase() === 'completed').length
+  const pending = transactions.filter(({ status }) => status.toLowerCase() === 'pending').length
+  const other = transactions.length - completed - pending
+  const total = transactions.length
+  const completedPercent = total ? (completed / total) * 100 : 0
+  const pendingPercent = total ? (pending / total) * 100 : 0
+  const chartStyle = {
+    background: total
+      ? `conic-gradient(#16a34a 0 ${completedPercent}%, #f59e0b ${completedPercent}% ${completedPercent + pendingPercent}%, #cbd5e1 ${completedPercent + pendingPercent}% 100%)`
+      : '#e2e8f0',
+  }
+
+  return <Panel title="Transaction Status" className="verification-panel"><div className="verification-summary"><div className="donut-chart" style={chartStyle}><div><strong>{total}</strong><small>Transactions</small></div></div><div className="verification-legend"><span><i className="legend-valid" />Completed <b>{completed}</b></span><span><i className="legend-invalid" />Pending <b>{pending}</b></span><span><i className="legend-used" />Other <b>{other}</b></span></div></div></Panel>
 }
 
-function ActivityFeed() {
-  return <Panel title="Recent Activity"><div className="activity-list">{activities.map(([icon, title, text, time]) => <div className="activity-item" key={title}><span className="activity-icon"><AdminIcon name={icon} size={16} /></span><div><strong>{title}</strong><p>{text}</p><time>{time}</time></div></div>)}</div></Panel>
+function ActivityFeed({ students, feedback, transactions }: { students: Student[]; feedback: Feedback[]; transactions: TicketPurchase[] }) {
+  const items = [
+    ...students.map((student) => ({ id: `student-${student.id}`, icon: 'students' as IconName, title: 'Student registered', text: student.full_name, createdAt: student.created_at })),
+    ...feedback.map((item) => ({ id: `feedback-${item.id}`, icon: 'feedback' as IconName, title: 'Feedback submitted', text: `${item.student_name} · ${item.rating}/5`, createdAt: item.created_at })),
+    ...transactions.map((item) => ({ id: `transaction-${item.id}`, icon: 'ticket' as IconName, title: 'Ticket purchase', text: `${item.route} · ${item.tickets} ticket(s) · LKR ${Number(item.amount).toFixed(2)}`, createdAt: item.created_at })),
+  ].sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()).slice(0, 4)
+
+  return <Panel title="Recent Activity"><div className="activity-list">{items.length === 0 ? <p className="admin-empty-state">No recent database activity.</p> : items.map((item) => <div className="activity-item" key={item.id}><span className="activity-icon"><AdminIcon name={item.icon} size={16} /></span><div><strong>{item.title}</strong><p>{item.text}</p><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></div></div>)}</div></Panel>
 }
 
 function FeedbackSnapshot({ feedback, loading, error, onDelete }: { feedback: Feedback[]; loading: boolean; error: string; onDelete: (item: Feedback) => void }) {
@@ -268,32 +288,62 @@ export function AdminDashboard() {
 
   useEffect(() => {
     if (!supabase) {
+      setRealtimeStatus('unavailable')
+      setWalletLoading(false)
+      setWalletError('Supabase is not configured.')
+      setTicketsLoading(false)
+      setTicketsError('Supabase is not configured.')
       setFeedbackLoading(false)
       setFeedbackError('Supabase is not configured.')
-      return
-    }
-
-    supabase.from('feedback').select('id, student_name, feedback, rating, created_at').order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) setFeedbackError(error.message)
-        else setFeedback(data || [])
-        setFeedbackLoading(false)
-      })
-  }, [])
-
-  useEffect(() => {
-    if (!supabase) {
       setStudentsLoading(false)
       setStudentsError('Supabase is not configured.')
       return
     }
 
-    supabase.from('students').select('id, full_name, email, created_at').order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) setStudentsError(error.message)
-        else setStudents(data || [])
-        setStudentsLoading(false)
+    const client = supabase
+    let active = true
+    const refreshDashboardData = async () => {
+      const [walletResult, transactionsResult, feedbackResult, studentsResult] = await Promise.all([
+        client.from('wallet').select('id, student_id, amount, created_at').order('created_at', { ascending: false }),
+        client.from('wallet_transactions').select('id, student_id, booking_token, route, tickets, payment_method, amount, balance_after, status, created_at').order('created_at', { ascending: false }),
+        client.from('feedback').select('id, student_name, feedback, rating, created_at').order('created_at', { ascending: false }),
+        client.from('students').select('id, full_name, email, created_at').order('created_at', { ascending: false }),
+      ])
+
+      if (!active) return
+      setWalletError(walletResult.error?.message || '')
+      setTicketsError(transactionsResult.error?.message || '')
+      setFeedbackError(feedbackResult.error?.message || '')
+      setStudentsError(studentsResult.error?.message || '')
+      if (!walletResult.error) setWalletTopUps((walletResult.data || []) as WalletTopUp[])
+      if (!transactionsResult.error) setTicketPurchases((transactionsResult.data || []) as TicketPurchase[])
+      if (!feedbackResult.error) setFeedback(feedbackResult.data || [])
+      if (!studentsResult.error) setStudents(studentsResult.data || [])
+      setWalletLoading(false)
+      setTicketsLoading(false)
+      setFeedbackLoading(false)
+      setStudentsLoading(false)
+    }
+
+    const channel = client.channel('admin-dashboard-analytics')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { void refreshDashboardData() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet' }, () => { void refreshDashboardData() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions' }, () => { void refreshDashboardData() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback' }, () => { void refreshDashboardData() })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('live')
+          void refreshDashboardData()
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeStatus('unavailable')
+        }
       })
+
+    void refreshDashboardData()
+    return () => {
+      active = false
+      void client.removeChannel(channel)
+    }
   }, [])
 
   const deleteStudent = async (student: Student) => {
@@ -406,9 +456,11 @@ export function AdminDashboard() {
     <aside className={`admin-sidebar ${menuOpen ? 'admin-sidebar-open' : ''}`}><div className="admin-brand"><div className="brand-mark">U</div><div><strong>UniRide</strong><span>Admin Portal</span></div><button className="sidebar-close" onClick={() => setMenuOpen(false)} aria-label="Close navigation"><AdminIcon name="close" /></button></div><nav>{navItems.map((item, index) => <a className={index === 0 ? 'active' : ''} href={`#${item.label.toLowerCase()}`} key={item.label} onClick={() => setMenuOpen(false)}><AdminIcon name={item.icon} /><span>{item.label}</span></a>)}</nav><button className="logout-button"><AdminIcon name="logout" /><span>Logout</span></button></aside>
     {menuOpen && <button className="admin-overlay" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
     <div className="admin-main"><header className="admin-topbar"><button className="menu-button" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><AdminIcon name="menu" /></button><div><h1>Dashboard</h1><p>Overview of UniRide activity</p></div><div className="admin-user"><button className="notification-button" aria-label="Notifications"><AdminIcon name="bell" /><span /></button><div className="admin-avatar">AD</div><div className="admin-user-name"><strong>Admin</strong><small>Administrator</small></div><AdminIcon name="chevron" size={15} /></div></header>
-      <main className="admin-content"><section className="admin-welcome"><div className="admin-welcome-copy"><span className="eyebrow">SLIIT Kandy / Admin Portal</span><h2>Good morning, Admin.</h2><p>Keep today&apos;s rides moving smoothly.</p><div className="quick-actions"><button><AdminIcon name="plus" size={16} /> Add Student</button><button><AdminIcon name="plus" size={16} /> Top Up Wallet</button></div></div><div className="welcome-mark"><AdminIcon name="dashboard" size={42} /></div></section>
-        <section className="admin-pulse" aria-label="Today's dashboard summary"><div><span className="pulse-label">Students</span><strong>2,450</strong><small><AdminIcon name="trend" size={12} /> 12.5% this month</small></div><div><span className="pulse-label">Tickets sold</span><strong>328</strong><small><AdminIcon name="ticket" size={12} /> 43 still available</small></div><div><span className="pulse-label">Wallet top-ups</span><strong>LKR 32,500</strong><small><AdminIcon name="trend" size={12} /> 8.2% today</small></div></section>
+      <main className="admin-content"><section className="admin-welcome"><div className="admin-welcome-copy"><span className="eyebrow">SLIIT Kandy / Admin Portal</span><h2>Good morning, Admin.</h2><p>Keep today&apos;s rides moving smoothly.</p><div className="quick-actions"><button><AdminIcon name="plus" size={16} /> Add Student</button><button type="button" onClick={() => setIsTopUpOpen(true)}><AdminIcon name="plus" size={16} /> Top Up Wallet</button></div></div><div className="welcome-mark"><AdminIcon name="dashboard" size={42} /></div></section>
+        <section className="admin-pulse" aria-label="Live database summary"><div><span className="pulse-label">Registered students</span><strong>{students.length.toLocaleString()}</strong><small>{studentsLoading ? 'Loading database...' : 'Current database total'}</small></div><div><span className="pulse-label">Tickets sold</span><strong>{totalTicketsSold.toLocaleString()}</strong><small>{ticketsLoading ? 'Loading database...' : `${ticketPurchases.length.toLocaleString()} purchases recorded`}</small></div><div><span className="pulse-label">Current wallet balance</span><strong>LKR {totalWalletBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong><small>{walletLoading ? 'Loading database...' : `${walletTopUps.length.toLocaleString()} student wallets`}</small></div></section>
         <RoutePanel />
+        <WalletTopUpsPanel topUps={walletTopUps} students={students} loading={walletLoading} error={walletError} onOpenTopUp={() => setIsTopUpOpen(true)} onEditTopUp={setEditingTopUp} />
+        <PurchasedTicketsPanel purchases={ticketPurchases} students={students} loading={ticketsLoading} error={ticketsError} />
         <StudentsPanel students={students} loading={studentsLoading} error={studentsError} onDelete={deleteStudent} />
         <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? 'Supabase connected' : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
         <div className="analytics-grid"><TicketSalesChart /><VerificationChart /></div><div className="lower-grid"><ActivityFeed /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
@@ -416,6 +468,119 @@ export function AdminDashboard() {
         
         {/* Admin Management Module */}
         <AdminManagement />
+        {isTopUpOpen && <WalletTopUpModal students={students} onClose={() => setIsTopUpOpen(false)} onSaved={handleTopUpSaved} />}
+        {editingTopUp && <WalletEditModal topUp={editingTopUp} onClose={() => setEditingTopUp(null)} onSaved={handleTopUpUpdated} />}
       </main></div>
   </div>
+}
+
+function WalletTopUpsPanel({ topUps, students, loading, error, onOpenTopUp, onEditTopUp }: { topUps: WalletTopUp[]; students: Student[]; loading: boolean; error: string; onOpenTopUp: () => void; onEditTopUp: (topUp: WalletTopUp) => void }) {
+  const studentById = new Map(students.map((student) => [student.id, student]))
+
+  return <section id="wallets" className="admin-panel wallet-admin-panel">
+    <div className="admin-panel-heading"><div><h2>Admin Wallet</h2><p className="admin-panel-subtitle">Student wallet top-up history</p></div><button type="button" className="route-submit wallet-action-button" onClick={onOpenTopUp}><AdminIcon name="plus" size={15} /> Top Up Wallet</button></div>
+    {error && <p className="database-status database-status-error">{error}</p>}
+    {loading ? <p className="admin-empty-state">Loading wallet activity...</p> : topUps.length === 0 ? <p className="admin-empty-state">No wallet top-ups have been recorded yet.</p> : <div className="wallet-admin-list">{topUps.map((topUp) => {
+      const student = studentById.get(topUp.student_id)
+      return <div className="wallet-admin-item" key={topUp.id}><div><strong>{student?.full_name || 'Unknown student'}</strong><span>{student?.email || 'Student record unavailable'}</span></div><div className="wallet-admin-amount"><strong>LKR {Number(topUp.amount).toFixed(2)}</strong><time>{new Date(topUp.created_at).toLocaleString()}</time><button type="button" className="wallet-edit-button" onClick={() => onEditTopUp(topUp)}>Edit amount</button></div></div>
+    })}</div>}
+  </section>
+}
+
+function WalletTopUpModal({ students, onClose, onSaved }: { students: Student[]; onClose: () => void; onSaved: (topUp: WalletTopUp) => void }) {
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError('')
+    const formData = new FormData(event.currentTarget)
+    const studentId = String(formData.get('studentId') || '')
+    const amount = Number(formData.get('amount'))
+
+    if (!studentId || !Number.isFinite(amount) || amount <= 0) {
+      setError('Select a student and enter a valid amount.')
+      return
+    }
+    if (!supabase) {
+      setError('Supabase is not configured.')
+      return
+    }
+
+    setIsSaving(true)
+    const { data: existingRows, error: lookupError } = await supabase.from('wallet').select('id, amount').eq('student_id', studentId).order('created_at', { ascending: false }).limit(1)
+    if (lookupError) {
+      setIsSaving(false)
+      setError(lookupError.message)
+      return
+    }
+
+    const existingWallet = existingRows?.[0]
+    const walletRequest = existingWallet
+      ? supabase.from('wallet').update({ amount: Number(existingWallet.amount) + amount }).eq('id', existingWallet.id).select('id, student_id, amount, created_at')
+      : supabase.from('wallet').insert({ student_id: studentId, amount }).select('id, student_id, amount, created_at')
+    const { data, error: saveError } = await walletRequest
+    setIsSaving(false)
+    if (saveError) {
+      setError(saveError.message)
+      return
+    }
+    const savedTopUp = data?.[0] as WalletTopUp | undefined
+    if (!savedTopUp) {
+      setError('The top-up was not returned by the database. Check the wallet table policies.')
+      return
+    }
+    onSaved(savedTopUp)
+  }
+
+  return <div className="checkout-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="checkout-modal admin-wallet-modal" role="dialog" aria-modal="true" aria-labelledby="admin-wallet-title"><button className="checkout-close" type="button" onClick={onClose} aria-label="Close wallet top-up form">×</button><div className="checkout-heading"><span className="checkout-eyebrow">Admin wallet</span><h2 id="admin-wallet-title">Top up a student wallet</h2><p>Select an existing student and add funds to their UniRide wallet.</p></div><form onSubmit={handleSubmit}><label>Student<select name="studentId" defaultValue="" required><option value="" disabled>Select a student</option>{students.map((student) => <option value={student.id} key={student.id}>{student.full_name} - {student.email}</option>)}</select></label><label>Top-up amount<input name="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required /></label>{error && <p className="database-status database-status-error" role="alert">{error}</p>}<button className="checkout-primary" type="submit" disabled={isSaving || students.length === 0}>{isSaving ? 'Saving...' : 'Save top-up'}</button></form></section></div>
+}
+
+function WalletEditModal({ topUp, onClose, onSaved }: { topUp: WalletTopUp; onClose: () => void; onSaved: (topUp: WalletTopUp) => void }) {
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError('')
+    const amount = Number(new FormData(event.currentTarget).get('amount'))
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter a valid amount.')
+      return
+    }
+    if (!supabase) {
+      setError('Supabase is not configured.')
+      return
+    }
+
+    setIsSaving(true)
+    const { data, error: saveError } = await supabase.from('wallet').update({ amount }).eq('id', topUp.id).select('id, student_id, amount, created_at')
+    setIsSaving(false)
+    if (saveError) {
+      setError(saveError.message)
+      return
+    }
+    const updatedTopUp = data?.[0] as WalletTopUp | undefined
+    if (!updatedTopUp) {
+      setError('The wallet record was not returned by the database. Check the wallet table policies.')
+      return
+    }
+    onSaved(updatedTopUp)
+  }
+
+  return <div className="checkout-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="checkout-modal admin-wallet-modal" role="dialog" aria-modal="true" aria-labelledby="edit-wallet-title"><button className="checkout-close" type="button" onClick={onClose} aria-label="Close edit wallet form">×</button><div className="checkout-heading"><span className="checkout-eyebrow">Admin wallet</span><h2 id="edit-wallet-title">Edit top-up amount</h2><p>Update the amount recorded for this student wallet top-up.</p></div><form onSubmit={handleSubmit}><label>Top-up amount<input name="amount" type="number" min="0.01" step="0.01" defaultValue={topUp.amount} required /></label>{error && <p className="database-status database-status-error" role="alert">{error}</p>}<button className="checkout-primary" type="submit" disabled={isSaving}>{isSaving ? 'Updating...' : 'Update amount'}</button></form></section></div>
+}
+
+function PurchasedTicketsPanel({ purchases, students, loading, error }: { purchases: TicketPurchase[]; students: Student[]; loading: boolean; error: string }) {
+  const studentById = new Map(students.map((student) => [student.id, student]))
+
+  return <section id="tickets" className="admin-panel purchased-tickets-panel">
+    <div className="admin-panel-heading"><div><h2>Purchased Tickets</h2><p className="admin-panel-subtitle">Tickets bought through Book a Ride</p></div><span className="eyebrow">{purchases.length} total</span></div>
+    {error && <p className="database-status database-status-error">{error}</p>}
+    {loading ? <p className="admin-empty-state">Loading purchased tickets...</p> : purchases.length === 0 ? <p className="admin-empty-state">No tickets have been purchased yet.</p> : <div className="purchased-ticket-list">{purchases.map((purchase) => {
+      const student = purchase.student_id ? studentById.get(purchase.student_id) : undefined
+      return <article className="purchased-ticket-item" key={purchase.id}><div className="purchased-ticket-main"><strong>{student?.full_name || 'Guest or unavailable student'}</strong><span>{student?.email || `Booking token: ${purchase.booking_token}`}</span><b>{purchase.route}</b></div><div className="purchased-ticket-meta"><strong>LKR {Number(purchase.amount).toFixed(2)}</strong><span>{purchase.tickets} {purchase.tickets === 1 ? 'ticket' : 'tickets'} · {purchase.payment_method}</span><time>{new Date(purchase.created_at).toLocaleString()}</time></div></article>
+    })}</div>}
+  </section>
 }

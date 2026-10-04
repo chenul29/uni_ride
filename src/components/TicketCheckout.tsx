@@ -1,8 +1,9 @@
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
 
 type TicketCheckoutProps = {
   onClose: () => void
-  onPurchase: (ticket: TicketDetails) => void
+  onPurchase: (ticket: TicketDetails) => void | Promise<void>
 }
 
 type TicketDetails = {
@@ -13,17 +14,18 @@ type TicketDetails = {
   token: string
 }
 
-const routes = [
-  { name: 'Peradeniya → SLIIT KandyUni', time: '7:20 AM', price: 150 },
-  { name: 'Kandy → SLIIT KandyUni', time: '7:50 AM', price: 100 },
-  { name: 'SLIIT KandyUni → Kandy', price: 100 },
-  { name: 'SLIIT KandyUni → Peradeniya', price: 150 },
-]
+type Route = {
+  id: string
+  starting_point: string
+  ending_point: string
+  ticket_price: number
+}
 
 export function TicketCheckout({ onClose, onPurchase }: TicketCheckoutProps) {
-  const [routeIndex, setRouteIndex] = useState(0)
-  const [morningExpanded, setMorningExpanded] = useState(false)
-  const [eveningExpanded, setEveningExpanded] = useState(false)
+  const [routes, setRoutes] = useState<Route[]>([])
+  const [selectedRouteId, setSelectedRouteId] = useState('')
+  const [routesLoading, setRoutesLoading] = useState(true)
+  const [routesError, setRoutesError] = useState('')
   const [tickets, setTickets] = useState(1)
   const [payment, setPayment] = useState('UniRide wallet')
   const [ticket, setTicket] = useState<TicketDetails | null>(null)
@@ -31,20 +33,62 @@ export function TicketCheckout({ onClose, onPurchase }: TicketCheckoutProps) {
   const [cardNumber, setCardNumber] = useState('')
   const [expiry, setExpiry] = useState('')
   const [securityCode, setSecurityCode] = useState('')
-  const route = routes[routeIndex]
-  const total = route.price * tickets
+  const route = routes.find(({ id }) => id === selectedRouteId)
+  const routeName = route ? `${route.starting_point} → ${route.ending_point}` : ''
+  const total = route ? Number(route.ticket_price) * tickets : 0
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const [purchaseError, setPurchaseError] = useState('')
+
+  useEffect(() => {
+    let active = true
+
+    const loadRoutes = async () => {
+      if (!supabase) {
+        setRoutesError('Routes are unavailable because Supabase is not configured.')
+        setRoutesLoading(false)
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('routes')
+        .select('id, starting_point, ending_point, ticket_price')
+        .order('created_at', { ascending: true })
+
+      if (!active) return
+      if (error) {
+        setRoutesError(error.message)
+      } else {
+        const availableRoutes = (data || []) as Route[]
+        setRoutes(availableRoutes)
+        setSelectedRouteId(availableRoutes[0]?.id || '')
+      }
+      setRoutesLoading(false)
+    }
+
+    void loadRoutes()
+    return () => { active = false }
+  }, [])
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setPurchaseError('')
+    if (!route) {
+      setPurchaseError('Select an available route before continuing.')
+      return
+    }
     const purchasedTicket = {
-      route: route.name,
+      route: routeName,
       tickets,
       payment,
       total,
       token: `UR${Math.floor(1000 + Math.random() * 9000)}`,
     }
-    setTicket(purchasedTicket)
-    onPurchase(purchasedTicket)
+    try {
+      await onPurchase(purchasedTicket)
+      setTicket(purchasedTicket)
+    } catch (error) {
+      setPurchaseError(error instanceof Error ? error.message : 'Could not complete the purchase.')
+    }
   }
 
   return (
@@ -77,65 +121,20 @@ export function TicketCheckout({ onClose, onPurchase }: TicketCheckoutProps) {
               <label>
                 Route
                 <div className="route-picker">
-                  <button
-                    className="route-toggle"
-                    type="button"
-                    aria-expanded={morningExpanded}
-                    onClick={() => setMorningExpanded((expanded) => !expanded)}
-                  >
-                    <span>Morning Route</span>
-                    <span className="route-toggle-detail">Departure Time: 7.20AM</span>
-                    <span className="route-toggle-icon">{morningExpanded ? '−' : '+'}</span>
-                  </button>
-                  {morningExpanded && (
-                    <div className="route-options">
-                      {routes.slice(0, 2).map((item, index) => (
-                        <button
-                          className={`route-option${routeIndex === index ? ' selected' : ''}`}
-                          type="button"
-                          key={item.name}
-                          onClick={() => setRouteIndex(index)}
-                        >
-                          <span>
-                            <strong>{item.name}</strong>
-                            <small>Departure time: {item.time}</small>
-                          </span>
-                          <b>LKR {item.price}</b>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <button
-                    className="route-toggle evening-route"
-                    type="button"
-                    aria-expanded={eveningExpanded}
-                    onClick={() => setEveningExpanded((expanded) => !expanded)}
-                  >
-                    <span>Evening Route</span>
-                    <span className="route-toggle-detail">Departure Time: 5:30 PM</span>
-                    <span className="route-toggle-icon">{eveningExpanded ? '−' : '+'}</span>
-                  </button>
-                  {eveningExpanded && (
-                    <div className="route-options evening-options">
-                      {routes.slice(2).map((item, index) => {
-                        const actualIndex = index + 2
-                        return (
-                          <button
-                            className={`route-option${routeIndex === actualIndex ? ' selected' : ''}`}
-                            type="button"
-                            key={item.name}
-                            onClick={() => setRouteIndex(actualIndex)}
-                          >
-                            <span>
-                              <strong>{item.name}</strong>
-                              {item.time && <small>Departure time: {item.time}</small>}
-                            </span>
-                            <b>LKR {item.price}</b>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
+                  {routesLoading ? <p className="admin-empty-state">Loading available routes...</p> : routesError ? <p className="database-status database-status-error" role="alert">{routesError}</p> : routes.length === 0 ? <p className="admin-empty-state">No routes are currently available.</p> : <div className="route-options">
+                    {routes.map((item) => (
+                      <button
+                        className={`route-option${selectedRouteId === item.id ? ' selected' : ''}`}
+                        type="button"
+                        key={item.id}
+                        aria-pressed={selectedRouteId === item.id}
+                        onClick={() => setSelectedRouteId(item.id)}
+                      >
+                        <span><strong>{item.starting_point} → {item.ending_point}</strong></span>
+                        <b>LKR {Number(item.ticket_price).toFixed(2)}</b>
+                      </button>
+                    ))}
+                  </div>}
                 </div>
               </label>
               <label>
@@ -177,7 +176,8 @@ export function TicketCheckout({ onClose, onPurchase }: TicketCheckoutProps) {
                 </fieldset>
               )}
               <div className="checkout-total"><span>Total</span><strong>LKR {total.toLocaleString()}</strong></div>
-              <button className="checkout-primary" type="submit">Confirm and purchase</button>
+              {purchaseError && <p className="database-status database-status-error" role="alert">{purchaseError}</p>}
+              <button className="checkout-primary" type="submit" disabled={routesLoading || !route}>Confirm and purchase</button>
               <p className="checkout-note">Payment processing will be connected to your student wallet.</p>
             </form>
           </>
