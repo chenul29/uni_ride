@@ -1,5 +1,6 @@
 create table if not exists public.wallet_transactions (
   id uuid primary key default gen_random_uuid(),
+  student_id uuid references public.students(id) on delete set null,
   booking_token text not null unique,
   route text not null,
   tickets integer not null check (tickets > 0),
@@ -9,6 +10,9 @@ create table if not exists public.wallet_transactions (
   status text not null default 'completed',
   created_at timestamptz not null default now()
 );
+
+alter table public.wallet_transactions
+  add column if not exists student_id uuid references public.students(id) on delete set null;
 
 create index if not exists wallet_transactions_created_at_idx
   on public.wallet_transactions (created_at desc);
@@ -21,3 +25,17 @@ create policy "Allow wallet transaction inserts"
   for insert
   to anon, authenticated
   with check (true);
+
+drop policy if exists "Allow wallet transaction reads" on public.wallet_transactions;
+create policy "Allow wallet transaction reads"
+  on public.wallet_transactions
+  for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Allow wallet transaction deletes" on public.wallet_transactions;
+create policy "Allow wallet transaction deletes"
+  on public.wallet_transactions
+  for delete
+  to anon, authenticated
+  using (true);

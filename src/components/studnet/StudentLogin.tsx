@@ -47,6 +47,7 @@ export default function StudentLogin({ mode = 'login' }: StudentLoginProps) {
 				const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
 				if (signInError) throw signInError
 				setMessage('Signed in successfully.')
+				window.location.href = '/'
 			}
 		} catch (submitError) {
 			setError(submitError instanceof Error ? submitError.message : 'Something went wrong.')

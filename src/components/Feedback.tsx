@@ -5,43 +5,17 @@
  * Responsive: grid layout that adapts to screen size
  */
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 interface Testimonial {
+  id: string
   initials: string
   name: string
   affiliation: string
   feedback: string
   rating: number
 }
-
-const testimonials: Testimonial[] = [
-  {
-    initials: 'KA',
-    name: 'Kayla Andersen',
-    affiliation: 'SLIIT Student',
-    feedback:
-      'Booking my university bus is much easier and more convenient with UniRide. I recommend it to all my friends on campus.',
-    rating: 5,
-  },
-  {
-    initials: 'JM',
-    name: 'James Mitchell',
-    affiliation: 'SLIIT Student',
-    feedback:
-      'The digital balance feature is fantastic. I can manage my transportation spending and never miss a ride. Great app!',
-    rating: 5,
-  },
-  {
-    initials: 'SR',
-    name: 'Sophia Reyes',
-    affiliation: 'SLIIT Student',
-    feedback:
-      'The 4-digit token system is simple and works perfectly. UniRide has definitely made campus life more comfortable.',
-    rating: 5,
-  },
-]
 
 function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
   return (
@@ -78,11 +52,59 @@ function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
 }
 
 export function Feedback() {
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [rating, setRating] = useState(5)
   const [isSaving, setIsSaving] = useState(false)
   const [submitError, setSubmitError] = useState('')
+
+  const loadRecentFeedback = async () => {
+    if (!supabase) {
+      setLoadError('Feedback is temporarily unavailable.')
+      setIsLoading(false)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('feedback')
+      .select('id, student_name, feedback, rating')
+      .order('created_at', { ascending: false })
+      .limit(3)
+
+    if (error) {
+      setLoadError('We could not load feedback right now.')
+      setIsLoading(false)
+      return
+    }
+
+    const recentFeedback = (data || []).map((item) => {
+      const nameParts = item.student_name.trim().split(/\s+/)
+      const initials = nameParts
+        .slice(0, 2)
+        .map((part: string) => part.charAt(0).toUpperCase())
+        .join('')
+
+      return {
+        id: item.id,
+        initials,
+        name: item.student_name,
+        affiliation: 'SLIIT Student',
+        feedback: item.feedback,
+        rating: item.rating,
+      }
+    })
+
+    setTestimonials(recentFeedback)
+    setLoadError('')
+    setIsLoading(false)
+  }
+
+  useEffect(() => {
+    loadRecentFeedback()
+  }, [])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -109,6 +131,7 @@ export function Feedback() {
       return
     }
 
+    await loadRecentFeedback()
     setIsSubmitted(true)
   }
 
@@ -137,8 +160,17 @@ export function Feedback() {
 
         {/* Testimonials Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-          {testimonials.map((testimonial) => (
-            <TestimonialCard key={testimonial.name} testimonial={testimonial} />
+          {isLoading && (
+            <p className="col-span-full text-center text-neutral-secondary-text">Loading recent feedback...</p>
+          )}
+          {!isLoading && loadError && (
+            <p className="col-span-full text-center text-neutral-secondary-text">{loadError}</p>
+          )}
+          {!isLoading && !loadError && testimonials.length === 0 && (
+            <p className="col-span-full text-center text-neutral-secondary-text">No feedback has been submitted yet.</p>
+          )}
+          {!isLoading && !loadError && testimonials.map((testimonial) => (
+            <TestimonialCard key={testimonial.id} testimonial={testimonial} />
           ))}
         </div>
 
