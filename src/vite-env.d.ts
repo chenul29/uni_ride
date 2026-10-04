@@ -11,3 +11,8 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+declare module 'pdfkit/standard-fonts/Helvetica' {
+  const fontData: unknown
+  export default fontData
+}

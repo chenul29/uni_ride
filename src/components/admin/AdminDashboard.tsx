@@ -37,16 +37,7 @@ type Feedback = {
   created_at: string
 }
 
-type WalletTopUp = {
-  id: string
-  student_id: string
-  amount: number
-  created_at: string
-}
-
-type TicketPurchase = {
-  id: string
-  student_id: string | null
+type WalletTransaction = {
   booking_token: string
   route: string
   tickets: number
@@ -243,11 +234,9 @@ function RoutePanel() {
 
 function ReportCard({ report, onDownload, downloading }: { report: string[]; onDownload?: (range: string) => void; downloading: boolean }) {
   const [range, setRange] = useState('Last 30 days')
-  const isFeedbackReport = report[0] === 'Feedback Report'
-  const isMoneyTransactionReport = report[0] === 'Money Transaction Report'
-  const isDownloadable = isFeedbackReport || isMoneyTransactionReport
+  const supportsPdfDownload = Boolean(onDownload)
 
-  return <article className="report-card"><div className="report-title"><span className="report-icon"><AdminIcon name="reports" size={17} /></span><h3>{report[0]}</h3></div><p>{report[1]}</p><div className="report-owner"><span className="owner-avatar">{report[2].slice(0, 2)}</span><span><small>Owned by</small><strong>{report[2]}</strong></span></div><div className="report-controls"><select value={range} onChange={(event) => setRange(event.target.value)} aria-label={`${report[0]} date range`}><option>Last 30 days</option><option>This month</option><option>This year</option></select><select defaultValue="PDF" aria-label={`${report[0]} format`}><option>PDF</option><option>CSV</option></select><button type="button" className="download-button" disabled={!isDownloadable || downloading} onClick={() => onDownload?.(range)} title={isDownloadable ? `Download ${report[0]} as PDF` : 'Downloads will be connected later'}><AdminIcon name="download" size={16} /></button></div></article>
+  return <article className="report-card"><div className="report-title"><span className="report-icon"><AdminIcon name="reports" size={17} /></span><h3>{report[0]}</h3></div><p>{report[1]}</p><div className="report-owner"><span className="owner-avatar">{report[2].slice(0, 2)}</span><span><small>Owned by</small><strong>{report[2]}</strong></span></div><div className="report-controls"><select value={range} onChange={(event) => setRange(event.target.value)} aria-label={`${report[0]} date range`}><option>Last 30 days</option><option>This month</option><option>This year</option></select><select defaultValue="PDF" aria-label={`${report[0]} format`}><option>PDF</option><option>CSV</option></select><button className="download-button" type="button" onClick={() => onDownload?.(range)} disabled={!supportsPdfDownload || downloading} title={supportsPdfDownload ? 'Download PDF' : 'Downloads will be connected later'} aria-label={supportsPdfDownload ? `Download ${report[0]} as PDF` : `${report[0]} download unavailable`}><AdminIcon name="download" size={16} /></button></div></article>
 }
 
 function drawPdfTemplate(pdf: PDFKit.PDFDocument, pageNumber: number) {
@@ -283,19 +272,8 @@ export function AdminDashboard() {
   const [feedback, setFeedback] = useState<Feedback[]>([])
   const [feedbackLoading, setFeedbackLoading] = useState(true)
   const [feedbackError, setFeedbackError] = useState('')
-  const [walletTopUps, setWalletTopUps] = useState<WalletTopUp[]>([])
-  const [walletLoading, setWalletLoading] = useState(true)
-  const [walletError, setWalletError] = useState('')
-  const [isTopUpOpen, setIsTopUpOpen] = useState(false)
-  const [editingTopUp, setEditingTopUp] = useState<WalletTopUp | null>(null)
-  const [ticketPurchases, setTicketPurchases] = useState<TicketPurchase[]>([])
-  const [ticketsLoading, setTicketsLoading] = useState(true)
-  const [ticketsError, setTicketsError] = useState('')
-  const [feedbackReportLoading, setFeedbackReportLoading] = useState(false)
-  const [feedbackReportError, setFeedbackReportError] = useState('')
-  const [moneyReportLoading, setMoneyReportLoading] = useState(false)
-  const [moneyReportError, setMoneyReportError] = useState('')
-  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'live' | 'unavailable'>('connecting')
+  const [walletReportLoading, setWalletReportLoading] = useState(false)
+  const [walletReportError, setWalletReportError] = useState('')
 
   useEffect(() => {
     if (!supabase) {
@@ -392,111 +370,14 @@ export function AdminDashboard() {
     setFeedback((currentFeedback) => currentFeedback.filter(({ id }) => id !== item.id))
   }
 
-  const handleTopUpSaved = (topUp: WalletTopUp) => {
-    setWalletTopUps((currentTopUps) => [topUp, ...currentTopUps])
-    setIsTopUpOpen(false)
-  }
-
-  const handleTopUpUpdated = (updatedTopUp: WalletTopUp) => {
-    setWalletTopUps((currentTopUps) => currentTopUps.map((topUp) => topUp.id === updatedTopUp.id ? updatedTopUp : topUp))
-    setEditingTopUp(null)
-  }
-
-  const totalTicketsSold = ticketPurchases.reduce((total, purchase) => total + Number(purchase.tickets), 0)
-  const totalWalletBalance = walletTopUps.reduce((total, wallet) => total + Number(wallet.amount), 0)
-
-  const downloadFeedbackReport = async (range: string) => {
-    setFeedbackReportError('')
+  const downloadWalletActivityReport = async (range: string) => {
+    setWalletReportError('')
     if (!supabase) {
-      setFeedbackReportError('Supabase is not configured.')
+      setWalletReportError('Supabase is not configured.')
       return
     }
 
-    setFeedbackReportLoading(true)
-    try {
-      let query = supabase.from('feedback').select('id, student_name, feedback, rating, created_at').order('created_at', { ascending: false })
-      const now = new Date()
-      if (range === 'Last 30 days') {
-        const from = new Date(now)
-        from.setDate(now.getDate() - 30)
-        query = query.gte('created_at', from.toISOString())
-      } else if (range === 'This month') {
-        query = query.gte('created_at', new Date(now.getFullYear(), now.getMonth(), 1).toISOString())
-      } else {
-        query = query.gte('created_at', new Date(now.getFullYear(), 0, 1).toISOString())
-      }
-
-      const { data, error } = await query
-      if (error) throw error
-
-      const rows = (data || []) as Feedback[]
-      const registerStdFonts = (pdfKitModule as unknown as { registerStdFonts: (fontData: unknown) => void }).registerStdFonts
-      registerStdFonts(Helvetica)
-      const chunks: Uint8Array[] = []
-      let pageNumber = 0
-      const pdf = new PDFDocument({ margin: 48, size: 'A4', autoFirstPage: false })
-      pdf.on('data', (chunk: Uint8Array) => chunks.push(chunk))
-      const addReportPage = () => {
-        pageNumber += 1
-        pdf.addPage()
-        drawPdfTemplate(pdf, pageNumber)
-      }
-      addReportPage()
-      const pdfReady = new Promise<void>((resolve, reject) => {
-        pdf.on('end', () => resolve())
-        pdf.on('error', reject)
-      })
-
-      pdf.x = 48
-      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text('UniRide Feedback Report', { width: 500 })
-      pdf.font('Helvetica').fontSize(10).fillColor('#475569').text(`Period: ${range}`, { width: 500 })
-      pdf.text(`Generated: ${new Date().toLocaleString()}`, { width: 500 })
-      pdf.moveDown()
-      pdf.fontSize(11).fillColor('#1e293b').text(`Total feedback: ${rows.length}`, { width: 500 })
-      pdf.text(`Average rating: ${rows.length ? (rows.reduce((total, item) => total + Number(item.rating), 0) / rows.length).toFixed(1) : 'N/A'} / 5`, { width: 500 })
-      pdf.moveDown()
-
-      if (rows.length === 0) {
-        pdf.fillColor('#475569').text('No feedback was submitted during this period.', { width: 500 })
-      } else {
-        rows.forEach((item, index) => {
-          if (pdf.y > pdf.page.height - 90) addReportPage()
-          pdf.font('Helvetica').fontSize(11).fillColor('#1e293b').text(`${index + 1}. ${item.student_name} - ${item.rating}/5`, { width: 500 })
-          pdf.fontSize(9).fillColor('#475569').text(new Date(item.created_at).toLocaleString(), { width: 500 })
-          pdf.fontSize(10).fillColor('#334155').text(item.feedback, { width: 500, lineGap: 2 })
-          pdf.moveDown(.8)
-        })
-      }
-      pdf.end()
-      await pdfReady
-
-      const blobParts = chunks.map((chunk) => {
-        const copy = new Uint8Array(chunk.byteLength)
-        copy.set(chunk)
-        return copy.buffer as ArrayBuffer
-      })
-      const blob = new Blob(blobParts, { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `uniride-feedback-report-${new Date().toISOString().slice(0, 10)}.pdf`
-      link.click()
-      URL.revokeObjectURL(url)
-    } catch (error) {
-      setFeedbackReportError(error instanceof Error ? error.message : 'Unable to generate the feedback report.')
-    } finally {
-      setFeedbackReportLoading(false)
-    }
-  }
-
-  const downloadMoneyTransactionReport = async (range: string) => {
-    setMoneyReportError('')
-    if (!supabase) {
-      setMoneyReportError('Supabase is not configured.')
-      return
-    }
-
-    setMoneyReportLoading(true)
+    setWalletReportLoading(true)
     try {
       const now = new Date()
       const from = range === 'Last 30 days'
@@ -504,24 +385,15 @@ export function AdminDashboard() {
         : range === 'This month'
           ? new Date(now.getFullYear(), now.getMonth(), 1)
           : new Date(now.getFullYear(), 0, 1)
-      const [walletResult, transactionResult, studentResult] = await Promise.all([
-        supabase.from('wallet').select('id, student_id, amount, created_at').order('created_at', { ascending: false }),
-        supabase.from('wallet_transactions')
-          .select('id, student_id, booking_token, route, tickets, payment_method, amount, balance_after, status, created_at')
-          .gte('created_at', from.toISOString())
-          .order('created_at', { ascending: false }),
-        supabase.from('students').select('id, full_name, email'),
-      ])
+      const { data, error } = await supabase
+        .from('wallet_transactions')
+        .select('booking_token, route, tickets, payment_method, amount, balance_after, status, created_at')
+        .gte('created_at', from.toISOString())
+        .order('created_at', { ascending: false })
 
-      if (walletResult.error) throw walletResult.error
-      if (transactionResult.error) throw transactionResult.error
-      if (studentResult.error) throw studentResult.error
+      if (error) throw error
 
-      const wallets = (walletResult.data || []) as WalletTopUp[]
-      const transactions = (transactionResult.data || []) as (TicketPurchase & { status: string })[]
-      const studentNames = new Map((studentResult.data || []).map((student) => [student.id, student.full_name]))
-      const totalWalletBalance = wallets.reduce((total, wallet) => total + Number(wallet.amount), 0)
-      const totalTransactionAmount = transactions.reduce((total, transaction) => total + Number(transaction.amount), 0)
+      const transactions = (data || []) as WalletTransaction[]
       const registerStdFonts = (pdfKitModule as unknown as { registerStdFonts: (fontData: unknown) => void }).registerStdFonts
       registerStdFonts(Helvetica)
       const chunks: Uint8Array[] = []
@@ -539,49 +411,28 @@ export function AdminDashboard() {
         pdf.on('error', reject)
       })
 
-      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text('Money Transaction Report', { width: 500 })
+      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text('Student Wallet Activity Report', { width: 500 })
       pdf.fontSize(10).fillColor('#475569').text(`Period: ${range}`, { width: 500 })
       pdf.text(`Generated: ${now.toLocaleString()}`, { width: 500 })
-      pdf.text('Prepared by: Thathsarani Liyanarathne', { width: 500 })
       pdf.moveDown()
-      pdf.fontSize(11).fillColor('#1e293b').text(`Current wallets: ${wallets.length} | Combined balance: LKR ${totalWalletBalance.toFixed(2)}`, { width: 500 })
-      pdf.text(`Ticket transactions in period: ${transactions.length} | Total spent: LKR ${totalTransactionAmount.toFixed(2)}`, { width: 500 })
+      pdf.fontSize(11).fillColor('#1e293b').text(`Transactions in period: ${transactions.length}`, { width: 500 })
+      pdf.text(`Total transaction value: LKR ${transactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0).toFixed(2)}`, { width: 500 })
       pdf.moveDown()
 
-      const ensureReportSpace = (required: number) => {
-        if (pdf.y + required > pdf.page.height - 75) addReportPage()
-      }
-      pdf.fontSize(13).fillColor('#1e3a8a').text('Current Wallet Balances', { width: 500 })
-      pdf.moveDown(.5)
-      if (wallets.length === 0) {
-        pdf.fontSize(10).fillColor('#475569').text('No wallet records were found.', { width: 500 })
-      } else {
-        wallets.forEach((wallet) => {
-          ensureReportSpace(44)
-          pdf.fontSize(10).fillColor('#1e293b').text(studentNames.get(wallet.student_id) || 'Unknown student', { width: 500 })
-          pdf.fontSize(9).fillColor('#475569').text(`Balance: LKR ${Number(wallet.amount).toFixed(2)} | Wallet record created: ${new Date(wallet.created_at).toLocaleString()}`, { width: 500 })
-          pdf.moveDown(.6)
-        })
-      }
-
-      ensureReportSpace(45)
-      pdf.moveDown(.4)
-      pdf.fontSize(13).fillColor('#1e3a8a').text(`Ticket Transactions (${range})`, { width: 500 })
-      pdf.moveDown(.5)
       if (transactions.length === 0) {
-        pdf.fontSize(10).fillColor('#475569').text('No ticket transactions were recorded during this period.', { width: 500 })
+        pdf.fontSize(10).fillColor('#475569').text('No wallet transactions were recorded during this period.', { width: 500 })
       } else {
         transactions.forEach((transaction, index) => {
-          ensureReportSpace(70)
-          pdf.fontSize(10).fillColor('#1e293b').text(`${index + 1}. ${studentNames.get(transaction.student_id || '') || 'Guest or unavailable student'} | LKR ${Number(transaction.amount).toFixed(2)} | ${transaction.status}`, { width: 500 })
-          pdf.fontSize(9).fillColor('#475569').text(`${new Date(transaction.created_at).toLocaleString()} | ${transaction.route} | ${transaction.tickets} ticket(s) | ${transaction.payment_method}`, { width: 500 })
+          if (pdf.y > pdf.page.height - 125) addReportPage()
+          pdf.fontSize(11).fillColor('#1e293b').text(`${index + 1}. ${transaction.route} | LKR ${Number(transaction.amount).toFixed(2)} | ${transaction.status}`, { width: 500 })
+          pdf.fontSize(9).fillColor('#475569').text(`${new Date(transaction.created_at).toLocaleString()} | ${transaction.tickets} ticket(s) | ${transaction.payment_method}`, { width: 500 })
           pdf.text(`Booking: ${transaction.booking_token} | Balance after: LKR ${Number(transaction.balance_after).toFixed(2)}`, { width: 500 })
           pdf.moveDown(.6)
         })
       }
+
       pdf.end()
       await pdfReady
-
       const blobParts = chunks.map((chunk) => {
         const copy = new Uint8Array(chunk.byteLength)
         copy.set(chunk)
@@ -591,13 +442,13 @@ export function AdminDashboard() {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `uniride-money-transaction-report-${new Date().toISOString().slice(0, 10)}.pdf`
+      link.download = `uniride-student-wallet-activity-${now.toISOString().slice(0, 10)}.pdf`
       link.click()
       URL.revokeObjectURL(url)
     } catch (error) {
-      setMoneyReportError(error instanceof Error ? error.message : 'Unable to generate the money transaction report.')
+      setWalletReportError(error instanceof Error ? error.message : 'Unable to generate the wallet activity report.')
     } finally {
-      setMoneyReportLoading(false)
+      setWalletReportLoading(false)
     }
   }
 
@@ -611,9 +462,9 @@ export function AdminDashboard() {
         <WalletTopUpsPanel topUps={walletTopUps} students={students} loading={walletLoading} error={walletError} onOpenTopUp={() => setIsTopUpOpen(true)} onEditTopUp={setEditingTopUp} />
         <PurchasedTicketsPanel purchases={ticketPurchases} students={students} loading={ticketsLoading} error={ticketsError} />
         <StudentsPanel students={students} loading={studentsLoading} error={studentsError} onDelete={deleteStudent} />
-        <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? `Supabase connected · Analytics ${realtimeStatus === 'live' ? 'live' : realtimeStatus === 'connecting' ? 'connecting' : 'realtime unavailable'}` : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
-        <div className="analytics-grid"><TicketSalesChart transactions={ticketPurchases} /><TransactionStatusChart transactions={ticketPurchases} /></div><div className="lower-grid"><ActivityFeed students={students} feedback={feedback} transactions={ticketPurchases} /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
-        <section id="reports" className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p></div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div>{feedbackReportError && <p className="database-status database-status-error" role="alert">{feedbackReportError}</p>}{moneyReportError && <p className="database-status database-status-error" role="alert">{moneyReportError}</p>}<div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Money Transaction Report' ? downloadMoneyTransactionReport : downloadFeedbackReport} downloading={report[0] === 'Money Transaction Report' ? moneyReportLoading : feedbackReportLoading} />)}</div></section>
+        <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? 'Supabase connected' : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
+        <div className="analytics-grid"><TicketSalesChart /><VerificationChart /></div><div className="lower-grid"><ActivityFeed /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
+        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p>{walletReportError && <p className="database-status database-status-error" role="alert">{walletReportError}</p>}</div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Student Wallet Activity Report' ? downloadWalletActivityReport : undefined} downloading={walletReportLoading} />)}</div></section>
         
         {/* Admin Management Module */}
         <AdminManagement />
