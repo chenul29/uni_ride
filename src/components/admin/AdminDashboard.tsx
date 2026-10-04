@@ -1,4 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
+import PDFDocument from 'pdfkit'
+import * as pdfKitModule from 'pdfkit'
+import Helvetica from 'pdfkit/standard-fonts/Helvetica'
 import { AdminIcon } from './AdminIcon'
 import { supabase } from '../../lib/supabase'
 import { AdminManagement } from './AdminManagement'
@@ -14,7 +17,7 @@ const reports = [
   ['Admin Activity Report', 'A summary of actions performed in the portal.', 'K.A.S.S Wijethunga'],
   ['Student Wallet Activity Report', 'Top-ups and wallet balance activity by student.', 'Dineth Kausalya'],
   ['Money Transaction Report', 'A detailed record of UniRide money movements.', 'B.L.T.T Liyanarathne'],
-  ['Conductor Verified Ticket Details Report', 'Verified ticket details across all routes.', 'W.M.C.D Warnasooriya'],
+  ['Feedback Report', 'Student feedback and ratings.', 'W.M.C.D Warnasooriya'],
   ['Detailed Report about Ticket Distribution', 'Ticket sales and distribution by period.', 'Ramith Keshara'],
   ['Report about Student Login Activities', 'Student sign-in activity and usage patterns.', 'J.E Wijerathna'],
 ]
@@ -216,8 +219,35 @@ function RoutePanel() {
   </section>
 }
 
-function ReportCard({ report }: { report: string[] }) {
-  return <article className="report-card"><div className="report-title"><span className="report-icon"><AdminIcon name="reports" size={17} /></span><h3>{report[0]}</h3></div><p>{report[1]}</p><div className="report-owner"><span className="owner-avatar">{report[2].slice(0, 2)}</span><span><small>Owned by</small><strong>{report[2]}</strong></span></div><div className="report-controls"><select defaultValue="Last 30 days" aria-label={`${report[0]} date range`}><option>Last 30 days</option><option>This month</option><option>This year</option></select><select defaultValue="PDF" aria-label={`${report[0]} format`}><option>PDF</option><option>CSV</option></select><button className="download-button" disabled title="Downloads will be connected later"><AdminIcon name="download" size={16} /></button></div></article>
+function ReportCard({ report, onDownload, downloading }: { report: string[]; onDownload?: (range: string) => void; downloading: boolean }) {
+  const [range, setRange] = useState('Last 30 days')
+  const isFeedbackReport = report[0] === 'Feedback Report'
+
+  return <article className="report-card"><div className="report-title"><span className="report-icon"><AdminIcon name="reports" size={17} /></span><h3>{report[0]}</h3></div><p>{report[1]}</p><div className="report-owner"><span className="owner-avatar">{report[2].slice(0, 2)}</span><span><small>Owned by</small><strong>{report[2]}</strong></span></div><div className="report-controls"><select value={range} onChange={(event) => setRange(event.target.value)} aria-label={`${report[0]} date range`}><option>Last 30 days</option><option>This month</option><option>This year</option></select><select defaultValue="PDF" aria-label={`${report[0]} format`}><option>PDF</option><option>CSV</option></select><button className="download-button" disabled={!isFeedbackReport || downloading} onClick={() => onDownload?.(range)} title={isFeedbackReport ? 'Download feedback report as PDF' : 'Downloads will be connected later'}><AdminIcon name="download" size={16} /></button></div></article>
+}
+
+function drawPdfTemplate(pdf: PDFKit.PDFDocument, pageNumber: number) {
+  const pageWidth = pdf.page.width
+  const pageHeight = pdf.page.height
+  const left = 34
+  const right = pageWidth - 34
+  const top = 30
+  const bottom = pageHeight - 30
+
+  pdf.save()
+  pdf.lineWidth(1).strokeColor('#cbd5e1').rect(left, top, pageWidth - 68, pageHeight - 60).stroke()
+  pdf.lineWidth(2).strokeColor('#2563eb').moveTo(left, top).lineTo(right, top).stroke()
+  pdf.roundedRect(left + 16, top + 14, 30, 30, 6).fillColor('#2563eb').fill()
+  pdf.fontSize(18).fillColor('#ffffff').text('U', left + 24, top + 18, { lineBreak: false })
+  pdf.fontSize(11).fillColor('#1e3a8a').text('SLIIT UNIVERSITY', left + 56, top + 13, { lineBreak: false })
+  pdf.fontSize(8).fillColor('#64748b').text('UniRide Administration Portal', left + 56, top + 29, { lineBreak: false })
+  pdf.moveTo(left + 16, top + 58).lineTo(right - 16, top + 58).lineWidth(.5).strokeColor('#e2e8f0').stroke()
+  pdf.moveTo(left + 16, bottom - 25).lineTo(right - 16, bottom - 25).stroke()
+  pdf.fontSize(8).fillColor('#64748b').text('SLIIT University | UniRide Admin Portal', left + 16, bottom - 18, { lineBreak: false })
+  pdf.text(`Page ${pageNumber}`, right - 55, bottom - 18, { width: 55, align: 'right', lineBreak: false })
+  pdf.restore()
+  pdf.x = 48
+  pdf.y = top + 78
 }
 
 export function AdminDashboard() {
@@ -237,6 +267,8 @@ export function AdminDashboard() {
   const [ticketPurchases, setTicketPurchases] = useState<TicketPurchase[]>([])
   const [ticketsLoading, setTicketsLoading] = useState(true)
   const [ticketsError, setTicketsError] = useState('')
+  const [feedbackReportLoading, setFeedbackReportLoading] = useState(false)
+  const [feedbackReportError, setFeedbackReportError] = useState('')
 
   useEffect(() => {
     if (!supabase) {
@@ -343,6 +375,90 @@ export function AdminDashboard() {
     setEditingTopUp(null)
   }
 
+  const downloadFeedbackReport = async (range: string) => {
+    setFeedbackReportError('')
+    if (!supabase) {
+      setFeedbackReportError('Supabase is not configured.')
+      return
+    }
+
+    setFeedbackReportLoading(true)
+    try {
+      let query = supabase.from('feedback').select('id, student_name, feedback, rating, created_at').order('created_at', { ascending: false })
+      const now = new Date()
+      if (range === 'Last 30 days') {
+        const from = new Date(now)
+        from.setDate(now.getDate() - 30)
+        query = query.gte('created_at', from.toISOString())
+      } else if (range === 'This month') {
+        query = query.gte('created_at', new Date(now.getFullYear(), now.getMonth(), 1).toISOString())
+      } else {
+        query = query.gte('created_at', new Date(now.getFullYear(), 0, 1).toISOString())
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+
+      const rows = (data || []) as Feedback[]
+      const registerStdFonts = (pdfKitModule as unknown as { registerStdFonts: (fontData: unknown) => void }).registerStdFonts
+      registerStdFonts(Helvetica)
+      const chunks: Uint8Array[] = []
+      let pageNumber = 0
+      const pdf = new PDFDocument({ margin: 48, size: 'A4', autoFirstPage: false })
+      pdf.on('data', (chunk: Uint8Array) => chunks.push(chunk))
+      const addReportPage = () => {
+        pageNumber += 1
+        pdf.addPage()
+        drawPdfTemplate(pdf, pageNumber)
+      }
+      addReportPage()
+      const pdfReady = new Promise<void>((resolve, reject) => {
+        pdf.on('end', () => resolve())
+        pdf.on('error', reject)
+      })
+
+      pdf.x = 48
+      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text('UniRide Feedback Report', { width: 500 })
+      pdf.font('Helvetica').fontSize(10).fillColor('#475569').text(`Period: ${range}`, { width: 500 })
+      pdf.text(`Generated: ${new Date().toLocaleString()}`, { width: 500 })
+      pdf.moveDown()
+      pdf.fontSize(11).fillColor('#1e293b').text(`Total feedback: ${rows.length}`, { width: 500 })
+      pdf.text(`Average rating: ${rows.length ? (rows.reduce((total, item) => total + Number(item.rating), 0) / rows.length).toFixed(1) : 'N/A'} / 5`, { width: 500 })
+      pdf.moveDown()
+
+      if (rows.length === 0) {
+        pdf.fillColor('#475569').text('No feedback was submitted during this period.', { width: 500 })
+      } else {
+        rows.forEach((item, index) => {
+          if (pdf.y > pdf.page.height - 90) addReportPage()
+          pdf.font('Helvetica').fontSize(11).fillColor('#1e293b').text(`${index + 1}. ${item.student_name} - ${item.rating}/5`, { width: 500 })
+          pdf.fontSize(9).fillColor('#475569').text(new Date(item.created_at).toLocaleString(), { width: 500 })
+          pdf.fontSize(10).fillColor('#334155').text(item.feedback, { width: 500, lineGap: 2 })
+          pdf.moveDown(.8)
+        })
+      }
+      pdf.end()
+      await pdfReady
+
+      const blobParts = chunks.map((chunk) => {
+        const copy = new Uint8Array(chunk.byteLength)
+        copy.set(chunk)
+        return copy.buffer as ArrayBuffer
+      })
+      const blob = new Blob(blobParts, { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `uniride-feedback-report-${new Date().toISOString().slice(0, 10)}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setFeedbackReportError(error instanceof Error ? error.message : 'Unable to generate the feedback report.')
+    } finally {
+      setFeedbackReportLoading(false)
+    }
+  }
+
   return <div className="admin-shell">
     <aside className={`admin-sidebar ${menuOpen ? 'admin-sidebar-open' : ''}`}><div className="admin-brand"><div className="brand-mark">U</div><div><strong>UniRide</strong><span>Admin Portal</span></div><button className="sidebar-close" onClick={() => setMenuOpen(false)} aria-label="Close navigation"><AdminIcon name="close" /></button></div><nav>{navItems.map((item, index) => <a className={index === 0 ? 'active' : ''} href={`#${item.label.toLowerCase()}`} key={item.label} onClick={() => setMenuOpen(false)}><AdminIcon name={item.icon} /><span>{item.label}</span></a>)}</nav><button className="logout-button"><AdminIcon name="logout" /><span>Logout</span></button></aside>
     {menuOpen && <button className="admin-overlay" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
@@ -355,7 +471,7 @@ export function AdminDashboard() {
         <StudentsPanel students={students} loading={studentsLoading} error={studentsError} onDelete={deleteStudent} />
         <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? 'Supabase connected' : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
         <div className="analytics-grid"><TicketSalesChart /><VerificationChart /></div><div className="lower-grid"><ActivityFeed /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
-        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p></div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} />)}</div></section>
+        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p></div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div>{feedbackReportError && <p className="database-status database-status-error" role="alert">{feedbackReportError}</p>}<div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={downloadFeedbackReport} downloading={feedbackReportLoading} />)}</div></section>
         
         {/* Admin Management Module */}
         <AdminManagement />
