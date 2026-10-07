@@ -18,7 +18,7 @@ const reports = [
   ['Student Wallet Activity Report', 'Top-ups and wallet balance activity by student.', 'Dineth Kausalya'],
   ['Money Transaction Report', 'A detailed record of UniRide money movements.', 'Thathsarani Liyanarathne'],
   ['Feedback Report', 'Student feedback and ratings.', 'W.M.C.D Warnasooriya'],
-  ['Detailed Report about Ticket Distribution', 'Ticket sales and distribution by period.', 'Ramith Keshara'],
+  ['Detailed Report about Route Management', 'Route planning and management activities.', 'Ramith Keshara'],
   ['Report about Student Login Activities', 'Student sign-in activity and usage patterns.', 'J.E Wijerathna'],
 ]
 
@@ -498,6 +498,214 @@ export function AdminDashboard() {
     }
   }
 
+  const downloadFeedbackReport = async (range: string) => {
+    setWalletReportError('')
+    setWalletReportLoading(true)
+    try {
+      const now = new Date()
+      const from = range === 'Last 30 days'
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)
+        : range === 'This month'
+          ? new Date(now.getFullYear(), now.getMonth(), 1)
+          : new Date(now.getFullYear(), 0, 1)
+      const rows = feedback.filter((item) => new Date(item.created_at) >= from)
+      const registerStdFonts = (pdfKitModule as unknown as { registerStdFonts: (fontData: unknown) => void }).registerStdFonts
+      registerStdFonts(Helvetica)
+      const chunks: Uint8Array[] = []
+      let pageNumber = 0
+      const pdf = new PDFDocument({ margin: 48, size: 'A4', autoFirstPage: false })
+      pdf.on('data', (chunk: Uint8Array) => chunks.push(chunk))
+      const addReportPage = () => {
+        pageNumber += 1
+        pdf.addPage()
+        drawPdfTemplate(pdf, pageNumber)
+      }
+
+      addReportPage()
+      const pdfReady = new Promise<void>((resolve, reject) => {
+        pdf.on('end', () => resolve())
+        pdf.on('error', reject)
+      })
+
+      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text('Student Feedback Report', { width: 500 })
+      pdf.fontSize(10).fillColor('#475569').text(`Period: ${range}`, { width: 500 })
+      pdf.text(`Generated: ${now.toLocaleString()}`, { width: 500 })
+      pdf.moveDown()
+      pdf.fontSize(11).fillColor('#1e293b').text(`Feedback entries in period: ${rows.length}`, { width: 500 })
+      if (rows.length > 0) pdf.text(`Average rating: ${(rows.reduce((sum, item) => sum + Number(item.rating), 0) / rows.length).toFixed(1)}/5`, { width: 500 })
+      pdf.moveDown()
+
+      if (rows.length === 0) {
+        pdf.fontSize(10).fillColor('#475569').text('No feedback was submitted during this period.', { width: 500 })
+      } else {
+        rows.forEach((item, index) => {
+          if (pdf.y > pdf.page.height - 145) addReportPage()
+          pdf.fontSize(11).fillColor('#1e293b').text(`${index + 1}. ${item.student_name} | Rating: ${item.rating}/5`, { width: 500 })
+          pdf.fontSize(9).fillColor('#475569').text(new Date(item.created_at).toLocaleString(), { width: 500 })
+          pdf.fontSize(10).fillColor('#334155').text(`"${item.feedback}"`, { width: 500 })
+          pdf.moveDown(.8)
+        })
+      }
+
+      pdf.end()
+      await pdfReady
+      const blobParts = chunks.map((chunk) => {
+        const copy = new Uint8Array(chunk.byteLength)
+        copy.set(chunk)
+        return copy.buffer as ArrayBuffer
+      })
+      const blob = new Blob(blobParts, { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `uniride-feedback-report-${now.toISOString().slice(0, 10)}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setWalletReportError(error instanceof Error ? error.message : 'Unable to generate the feedback report.')
+    } finally {
+      setWalletReportLoading(false)
+    }
+  }
+
+  const downloadSummaryReport = async (title: string, range: string) => {
+    setWalletReportError('')
+    setWalletReportLoading(true)
+    try {
+      const now = new Date()
+      const from = range === 'Last 30 days' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30) : range === 'This month' ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), 0, 1)
+      const activity = [
+        ...students.filter((item) => new Date(item.created_at) >= from).map((item) => `Student registered | ${item.full_name} | ${new Date(item.created_at).toLocaleString()}`),
+        ...feedback.filter((item) => new Date(item.created_at) >= from).map((item) => `Feedback | ${item.student_name} | Rating ${item.rating}/5 | ${new Date(item.created_at).toLocaleString()}`),
+        ...ticketPurchases.filter((item) => new Date(item.created_at) >= from).map((item) => `Ticket purchase | ${item.route} | ${item.tickets} ticket(s) | ${new Date(item.created_at).toLocaleString()}`),
+      ]
+      let rows = title.includes('Ticket') ? activity.filter((item) => item.includes('Ticket purchase')) : activity
+      if (title === 'Admin Activity Report') {
+        if (!supabase) throw new Error('Supabase is not configured.')
+        const { data, error } = await supabase.from('admins').select('*')
+        if (error) throw error
+
+        const adminDateFields = ['created_at', 'updated_at', 'last_login', 'last_login_at', 'login_at']
+        const formatAdminField = (key: string, value: unknown) => {
+          if (value === null || value === undefined || value === '') return ''
+          if (adminDateFields.includes(key)) {
+            const date = new Date(String(value))
+            return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
+          }
+          return typeof value === 'object' ? JSON.stringify(value) : String(value)
+        }
+        const adminRows = (data || []) as Record<string, unknown>[]
+        rows = adminRows
+          .filter((admin) => {
+            const activityDates = adminDateFields
+              .map((field) => admin[field])
+              .filter((value): value is string | number => typeof value === 'string' || typeof value === 'number')
+              .map((value) => new Date(value))
+              .filter((date) => !Number.isNaN(date.getTime()))
+            return activityDates.length === 0 || activityDates.some((date) => date >= from)
+          })
+          .map((admin) => Object.entries(admin)
+            .filter(([key, value]) => key.toLowerCase() !== 'password' && value !== null && value !== undefined && value !== '')
+            .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${formatAdminField(key, value)}`)
+            .join(' | '))
+          .filter(Boolean)
+      }
+      if (title === 'Money Transaction Report') {
+        if (!supabase) throw new Error('Supabase is not configured.')
+        const { data, error } = await supabase
+          .from('wallet')
+          .select('id, student_id, amount, created_at')
+          .gte('created_at', from.toISOString())
+          .order('created_at', { ascending: false })
+        if (error) throw error
+
+        const studentById = new Map(students.map((student) => [student.id, student]))
+        const walletRows = (data || []) as WalletTopUp[]
+        rows = walletRows.map((wallet) => {
+          const student = studentById.get(wallet.student_id)
+          return `Wallet ID: ${wallet.id} | Student: ${student?.full_name || wallet.student_id} | Amount: LKR ${Number(wallet.amount).toFixed(2)} | Created: ${new Date(wallet.created_at).toLocaleString()}`
+        })
+      }
+      if (title === 'Detailed Report about Route Management') {
+        if (!supabase) throw new Error('Supabase is not configured.')
+        const { data, error } = await supabase.from('routes').select('*').order('id', { ascending: false })
+        if (error) throw error
+
+        const routeRows = (data || []) as Record<string, unknown>[]
+        rows = routeRows
+          .filter((route) => {
+            const createdAt = route.created_at
+            if (typeof createdAt !== 'string' && typeof createdAt !== 'number') return true
+            const date = new Date(createdAt)
+            return Number.isNaN(date.getTime()) || date >= from
+          })
+          .map((route) => Object.entries(route)
+            .filter(([, value]) => value !== null && value !== undefined && value !== '')
+            .map(([key, value]) => {
+              const formattedValue = key === 'ticket_price'
+                ? `LKR ${Number(value).toFixed(2)}`
+                : key === 'created_at' || key === 'updated_at'
+                  ? new Date(String(value)).toLocaleString()
+                  : typeof value === 'object' ? JSON.stringify(value) : String(value)
+              return `${key.replace(/_/g, ' ')}: ${formattedValue}`
+            })
+            .join(' | '))
+          .filter(Boolean)
+      }
+      if (title === 'Report about Student Login Activities') {
+        if (!supabase) throw new Error('Supabase is not configured.')
+        const { data, error } = await supabase.from('students').select('*').order('created_at', { ascending: false })
+        if (error) throw error
+
+        const studentRows = (data || []) as Record<string, unknown>[]
+        const studentDateFields = ['created_at', 'updated_at', 'last_login', 'last_login_at', 'login_at']
+        rows = studentRows
+          .filter((student) => {
+            const activityDates = studentDateFields
+              .map((field) => student[field])
+              .filter((value): value is string | number => typeof value === 'string' || typeof value === 'number')
+              .map((value) => new Date(value))
+              .filter((date) => !Number.isNaN(date.getTime()))
+            return activityDates.length === 0 || activityDates.some((date) => date >= from)
+          })
+          .map((student) => Object.entries(student)
+            .filter(([key, value]) => key.toLowerCase() !== 'password' && value !== null && value !== undefined && value !== '')
+            .map(([key, value]) => {
+              const formattedValue = studentDateFields.includes(key)
+                ? new Date(String(value)).toLocaleString()
+                : typeof value === 'object' ? JSON.stringify(value) : String(value)
+              return `${key.replace(/_/g, ' ')}: ${formattedValue}`
+            })
+            .join(' | '))
+          .filter(Boolean)
+      }
+      const registerStdFonts = (pdfKitModule as unknown as { registerStdFonts: (fontData: unknown) => void }).registerStdFonts
+      registerStdFonts(Helvetica)
+      const chunks: Uint8Array[] = []
+      const pdf = new PDFDocument({ margin: 48, size: 'A4' })
+      pdf.on('data', (chunk: Uint8Array) => chunks.push(chunk))
+      const pdfReady = new Promise<void>((resolve, reject) => { pdf.on('end', resolve); pdf.on('error', reject) })
+      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text(title, { width: 500 })
+      pdf.fontSize(10).fillColor('#475569').text(`Period: ${range}`, { width: 500 }).text(`Generated: ${now.toLocaleString()}`, { width: 500 }).moveDown()
+      pdf.fontSize(11).fillColor('#1e293b').text(`Records in period: ${rows.length}`, { width: 500 }).moveDown()
+      if (rows.length === 0) pdf.fontSize(10).fillColor('#475569').text('No records were found during this period.', { width: 500 })
+      else rows.forEach((row, index) => pdf.fontSize(10).fillColor('#334155').text(`${index + 1}. ${row}`, { width: 500 }).moveDown(.4))
+      pdf.end()
+      await pdfReady
+      const blob = new Blob([new Uint8Array(chunks.reduce((all, chunk) => [...all, ...chunk], [] as number[]))], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `uniride-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${now.toISOString().slice(0, 10)}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setWalletReportError(error instanceof Error ? error.message : `Unable to generate the ${title}.`)
+    } finally {
+      setWalletReportLoading(false)
+    }
+  }
+
   return <div className="admin-shell">
     <aside className={`admin-sidebar ${menuOpen ? 'admin-sidebar-open' : ''}`}><div className="admin-brand"><div className="brand-mark">U</div><div><strong>UniRide</strong><span>Admin Portal</span></div><button className="sidebar-close" onClick={() => setMenuOpen(false)} aria-label="Close navigation"><AdminIcon name="close" /></button></div><nav>{navItems.map((item, index) => <a className={index === 0 ? 'active' : ''} href={`#${item.label.toLowerCase()}`} key={item.label} onClick={() => setMenuOpen(false)}><AdminIcon name={item.icon} /><span>{item.label}</span></a>)}</nav><button className="logout-button"><AdminIcon name="logout" /><span>Logout</span></button></aside>
     {menuOpen && <button className="admin-overlay" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
@@ -510,7 +718,7 @@ export function AdminDashboard() {
         <StudentsPanel students={students} loading={studentsLoading} error={studentsError} onDelete={deleteStudent} />
         <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? `Supabase connected · Realtime ${realtimeStatus}` : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
         <div className="analytics-grid"><TicketSalesChart transactions={ticketPurchases} /><VerificationChart transactions={ticketPurchases} /></div><div className="lower-grid"><ActivityFeed students={students} feedback={feedback} transactions={ticketPurchases} /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
-        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p>{walletReportError && <p className="database-status database-status-error" role="alert">{walletReportError}</p>}</div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Student Wallet Activity Report' ? downloadWalletActivityReport : undefined} downloading={walletReportLoading} />)}</div></section>
+        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p>{walletReportError && <p className="database-status database-status-error" role="alert">{walletReportError}</p>}</div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Student Wallet Activity Report' ? downloadWalletActivityReport : report[0] === 'Feedback Report' ? downloadFeedbackReport : (range) => downloadSummaryReport(report[0], range)} downloading={walletReportLoading} />)}</div></section>
         
         {/* Admin Management Module */}
         <AdminManagement />
