@@ -70,6 +70,10 @@ export const AdminManagement: React.FC<AdminManagementProps> = ({ userEmail }) =
 
   const fetchAdmins = async () => {
     try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured.');
+      }
+
       const { data, error } = await supabase
         .from('admins')
         .select('id, name, email, role')

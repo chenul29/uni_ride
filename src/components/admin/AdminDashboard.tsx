@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
+import PDFDocument from 'pdfkit'
+import * as pdfKitModule from 'pdfkit'
+import Helvetica from 'pdfkit/standard-fonts/Helvetica'
 import { AdminIcon } from './AdminIcon'
 import { supabase } from '../../lib/supabase'
 import { AdminManagement } from './AdminManagement'
@@ -20,21 +23,37 @@ const navItems: { label: string; icon: IconName }[] = [
 const reports = [
   ['Admin Activity Report', 'A summary of actions performed in the portal.', 'K.A.S.S Wijethunga'],
   ['Student Wallet Activity Report', 'Top-ups and wallet balance activity by student.', 'Dineth Kausalya'],
-  ['Money Transaction Report', 'A detailed record of UniRide money movements.', 'B.L.T.T Liyanarathne'],
-  ['Conductor Verified Ticket Details Report', 'Verified ticket details across all routes.', 'W.M.C.D Warnasooriya'],
+  ['Money Transaction Report', 'A detailed record of UniRide money movements.', 'Thathsarani Liyanarathne'],
+  ['Feedback Report', 'Student feedback and ratings.', 'W.M.C.D Warnasooriya'],
   ['Detailed Report about Ticket Distribution', 'Ticket sales and distribution by period.', 'Ramith Keshara'],
   ['Report about Student Login Activities', 'Student sign-in activity and usage patterns.', 'J.E Wijerathna'],
 ]
 
-const activities = [
-  ['wallet', 'Wallet Top-Up', 'Student wallet topped up by LKR 1,000.', '5 minutes ago'],
-  ['check', 'Ticket Verified', 'Ticket #UR10284 verified by conductor.', '18 minutes ago'],
-  ['feedback', 'New Feedback', 'A student submitted a 4-star feedback.', '32 minutes ago'],
-  ['ticket', 'Ticket Purchased', 'A new university bus ticket was purchased.', '1 hour ago'],
-] as const
+type Student = {
+  id: string
+  full_name: string
+  email: string
+  created_at: string
+}
 
-const sales = [42, 51, 38, 64, 72, 35, 26]
-const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+type Feedback = {
+  id: string
+  student_name: string
+  feedback: string
+  rating: number
+  created_at: string
+}
+
+type WalletTransaction = {
+  booking_token: string
+  route: string
+  tickets: number
+  payment_method: string
+  amount: number
+  balance_after: number
+  status: string
+  created_at: string
+}
 
 // Updated Function to generate and download Admin Activity Report PDF
 const downloadAdminActivityReport = async () => {
@@ -250,7 +269,15 @@ function ReportCard({ report }: { report: string[] }) {
 
 export function AdminDashboard() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking')
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error' | 'not-configured'>('checking')
+  const [students, setStudents] = useState<Student[]>([])
+  const [studentsLoading, setStudentsLoading] = useState(true)
+  const [studentsError, setStudentsError] = useState('')
+  const [feedback, setFeedback] = useState<Feedback[]>([])
+  const [feedbackLoading, setFeedbackLoading] = useState(true)
+  const [feedbackError, setFeedbackError] = useState('')
+  const [walletReportLoading, setWalletReportLoading] = useState(false)
+  const [walletReportError, setWalletReportError] = useState('')
 
   // Dynamic Admin States
   const [adminName, setAdminName] = useState('Admin')

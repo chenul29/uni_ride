@@ -267,3 +267,13 @@ The page is fully responsive and works seamlessly on:
 ---
 
 **Built with ❤️ for university students by the UniRide team**
+## Student login and wallet setup
+
+Run the Supabase scripts in this order:
+
+1. `supabase/students.sql`
+2. `supabase/wallet_topups.sql`
+3. `supabase/wallet_transactions.sql`
+4. `supabase/student_profile_setup.sql`
+
+New student registrations create a row in `public.students` through the auth trigger and a separate wallet with an initial balance of LKR 1,000. The profile setup script creates the student photo bucket and owner-only storage policies. The application loads the wallet belonging to the signed-in student, requires student authentication before booking, and stores purchase history against that student's profile.

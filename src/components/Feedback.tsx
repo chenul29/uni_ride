@@ -5,7 +5,12 @@
  * Responsive: grid layout that adapts to screen size
  */
 
+import { FormEvent, useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
+
 interface Testimonial {
+  id: string
+  authUserId: string | null
   initials: string
   name: string
   affiliation: string
@@ -13,34 +18,11 @@ interface Testimonial {
   rating: number
 }
 
-const testimonials: Testimonial[] = [
-  {
-    initials: 'KA',
-    name: 'Kayla Andersen',
-    affiliation: 'SLIIT Student',
-    feedback:
-      'Booking my university bus is much easier and more convenient with UniRide. I recommend it to all my friends on campus.',
-    rating: 5,
-  },
-  {
-    initials: 'JM',
-    name: 'James Mitchell',
-    affiliation: 'SLIIT Student',
-    feedback:
-      'The digital balance feature is fantastic. I can manage my transportation spending and never miss a ride. Great app!',
-    rating: 5,
-  },
-  {
-    initials: 'SR',
-    name: 'Sophia Reyes',
-    affiliation: 'SLIIT Student',
-    feedback:
-      'The 4-digit token system is simple and works perfectly. UniRide has definitely made campus life more comfortable.',
-    rating: 5,
-  },
-]
-
-function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
+function TestimonialCard({ testimonial, canEdit, onEdit }: {
+  testimonial: Testimonial
+  canEdit: boolean
+  onEdit: (testimonial: Testimonial) => void
+}) {
   return (
     <div className="bg-white border border-neutral-border rounded-xl p-6 sm:p-8 hover:border-primary-blue hover:shadow-lg transition-all duration-300">
       {/* Star Rating */}
@@ -58,23 +40,190 @@ function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
       </p>
 
       {/* Avatar and Student Info */}
-      <div className="flex items-center gap-4">
-        {/* Avatar Circle with Initials */}
-        <div className="w-12 h-12 bg-gradient-to-br from-primary-blue to-primary-dark-blue rounded-full flex items-center justify-center">
-          <span className="text-white font-bold text-sm">{testimonial.initials}</span>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          {/* Avatar Circle with Initials */}
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-blue to-primary-dark-blue">
+            <span className="text-sm font-bold text-white">{testimonial.initials}</span>
+          </div>
 
-        {/* Student Name and Affiliation */}
-        <div>
-          <p className="font-semibold text-neutral-main-text">{testimonial.name}</p>
-          <p className="text-sm text-neutral-secondary-text">{testimonial.affiliation}</p>
+          {/* Student Name and Affiliation */}
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-neutral-main-text">{testimonial.name}</p>
+            <p className="truncate text-sm text-neutral-secondary-text">{testimonial.affiliation}</p>
+          </div>
         </div>
+        {canEdit && (
+          <button
+            type="button"
+            className="rounded-lg border border-primary-blue px-3 py-2 text-sm font-semibold text-primary-blue transition hover:bg-primary-blue hover:text-white"
+            onClick={() => onEdit(testimonial)}
+          >
+            Edit
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
 export function Feedback() {
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [rating, setRating] = useState(5)
+  const [isSaving, setIsSaving] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [authUserId, setAuthUserId] = useState<string | null>(null)
+  const [editingFeedback, setEditingFeedback] = useState<Testimonial | null>(null)
+
+  const loadRecentFeedback = async () => {
+    if (!supabase) {
+      setLoadError('Feedback is temporarily unavailable.')
+      setIsLoading(false)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('feedback')
+      .select('id, auth_user_id, student_name, feedback, rating')
+      .order('created_at', { ascending: false })
+      .limit(3)
+
+    if (error) {
+      setLoadError('We could not load feedback right now.')
+      setIsLoading(false)
+      return
+    }
+
+    const recentFeedback = (data || []).map((item) => {
+      const nameParts = item.student_name.trim().split(/\s+/)
+      const initials = nameParts
+        .slice(0, 2)
+        .map((part: string) => part.charAt(0).toUpperCase())
+        .join('')
+
+      return {
+        id: item.id,
+        authUserId: item.auth_user_id,
+        initials,
+        name: item.student_name,
+        affiliation: 'SLIIT Student',
+        feedback: item.feedback,
+        rating: item.rating,
+      }
+    })
+
+    setTestimonials(recentFeedback)
+    setLoadError('')
+    setIsLoading(false)
+  }
+
+  useEffect(() => {
+    if (!supabase) {
+      loadRecentFeedback()
+      return
+    }
+
+    const client = supabase
+    client.auth.getUser().then(({ data }) => setAuthUserId(data.user?.id ?? null))
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+      setAuthUserId(session?.user?.id ?? null)
+    })
+
+    loadRecentFeedback()
+    return () => authListener.subscription.unsubscribe()
+  }, [])
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSubmitError('')
+
+    if (!supabase) {
+      setSubmitError('Feedback is temporarily unavailable. Please try again later.')
+      return
+    }
+
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      setIsSaving(false)
+      console.error('Could not identify the signed-in student:', userError)
+      setSubmitError(`Could not verify your account: ${userError.message}`)
+      return
+    }
+
+    const currentUserId = userData.user?.id ?? null
+    if (!currentUserId) {
+      setIsSaving(false)
+      setSubmitError('Please sign in before submitting or editing feedback.')
+      return
+    }
+
+    if (editingFeedback && editingFeedback.authUserId !== currentUserId) {
+      setIsSaving(false)
+      setSubmitError('You can only edit feedback submitted from your signed-in account.')
+      return
+    }
+
+    const feedbackData = {
+      student_name: String(formData.get('studentName') || '').trim(),
+      feedback: String(formData.get('feedback') || '').trim(),
+      rating,
+    }
+    const query = editingFeedback
+      ? supabase
+        .from('feedback')
+        .update(feedbackData)
+        .eq('id', editingFeedback.id)
+        .eq('auth_user_id', currentUserId)
+        .select('id')
+      : supabase
+        .from('feedback')
+        .insert({ ...feedbackData, auth_user_id: currentUserId })
+    const { data: savedFeedback, error } = await query
+
+    setIsSaving(false)
+
+    if (error || (editingFeedback && !savedFeedback?.length)) {
+      const errorMessage = error?.message || 'No feedback row was updated.'
+      console.error('Could not save feedback:', error || errorMessage)
+      setSubmitError(
+        editingFeedback && !error
+          ? 'This feedback is not linked to your signed-in account. Submit a new feedback entry while signed in, or link this old entry in Supabase.'
+          : `Could not save feedback: ${errorMessage}`,
+      )
+      return
+    }
+
+    await loadRecentFeedback()
+    if (editingFeedback) {
+      closeForm()
+    } else {
+      setIsSubmitted(true)
+    }
+  }
+
+  const closeForm = () => {
+    setIsFormOpen(false)
+    setIsSubmitted(false)
+    setRating(5)
+    setSubmitError('')
+    setEditingFeedback(null)
+  }
+
+  const openEditForm = (testimonial: Testimonial) => {
+    setEditingFeedback(testimonial)
+    setRating(testimonial.rating)
+    setSubmitError('')
+    setIsSubmitted(false)
+    setIsFormOpen(true)
+  }
+
   return (
     <section
       id="feedback"
@@ -93,8 +242,22 @@ export function Feedback() {
 
         {/* Testimonials Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-          {testimonials.map((testimonial) => (
-            <TestimonialCard key={testimonial.name} testimonial={testimonial} />
+          {isLoading && (
+            <p className="col-span-full text-center text-neutral-secondary-text">Loading recent feedback...</p>
+          )}
+          {!isLoading && loadError && (
+            <p className="col-span-full text-center text-neutral-secondary-text">{loadError}</p>
+          )}
+          {!isLoading && !loadError && testimonials.length === 0 && (
+            <p className="col-span-full text-center text-neutral-secondary-text">No feedback has been submitted yet.</p>
+          )}
+          {!isLoading && !loadError && testimonials.map((testimonial) => (
+            <TestimonialCard
+              key={testimonial.id}
+              testimonial={testimonial}
+              canEdit={Boolean(authUserId && testimonial.authUserId === authUserId)}
+              onEdit={openEditForm}
+            />
           ))}
         </div>
 
@@ -103,11 +266,110 @@ export function Feedback() {
           <p className="text-neutral-secondary-text mb-6">
             Join 2,000+ students already using UniRide for convenient campus travel.
           </p>
-          <button className="px-8 py-3 bg-gradient-to-r from-primary-blue to-primary-dark-blue text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">
-            Get Started Today
+          <button
+            className="px-8 py-3 bg-gradient-to-r from-primary-blue to-primary-dark-blue text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200"
+            onClick={() => setIsFormOpen(true)}
+          >
+            Add Your Feedback
           </button>
         </div>
       </div>
+
+      {isFormOpen && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => event.target === event.currentTarget && closeForm()}
+        >
+          <section
+            className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-2xl sm:p-8"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="feedback-form-title"
+          >
+            <button
+              type="button"
+              className="absolute right-4 top-4 text-2xl leading-none text-slate-400 hover:text-slate-700"
+              onClick={closeForm}
+              aria-label="Close feedback form"
+            >
+              ×
+            </button>
+
+            {isSubmitted ? (
+              <div className="py-8 text-center">
+                <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-green-100 text-2xl font-bold text-green-600">
+                  ✓
+                </div>
+                <h2 id="feedback-form-title" className="mb-2 text-2xl font-bold text-neutral-main-text">
+                  Thank you for your feedback
+                </h2>
+                <p className="mb-6 text-sm text-neutral-secondary-text">
+                  Your experience helps us make UniRide better for everyone.
+                </p>
+                <button type="button" className="rounded-lg bg-primary-blue px-6 py-3 font-semibold text-white hover:bg-primary-dark-blue" onClick={closeForm}>
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="mb-6 pr-8">
+                  <p className="mb-1 text-xs font-bold uppercase tracking-widest text-primary-blue">Student feedback</p>
+                  <h2 id="feedback-form-title" className="text-2xl font-bold text-neutral-main-text">
+                    {editingFeedback ? 'Edit your feedback' : 'Share your experience'}
+                  </h2>
+                  <p className="mt-2 text-sm text-neutral-secondary-text">
+                    {editingFeedback ? 'Update your experience with UniRide.' : 'Tell us how UniRide is working for you.'}
+                  </p>
+                </div>
+
+                <form key={editingFeedback?.id ?? 'new-feedback'} className="grid gap-5" onSubmit={handleSubmit}>
+                  <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                    Student name
+                    <input
+                      className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-normal outline-none focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/20"
+                      name="studentName"
+                      placeholder="Enter your name"
+                      defaultValue={editingFeedback?.name}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                    Feedback
+                    <textarea
+                      className="min-h-28 resize-y rounded-lg border border-slate-300 px-3 py-3 text-sm font-normal outline-none focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/20"
+                      name="feedback"
+                      placeholder="What do you think about UniRide?"
+                      defaultValue={editingFeedback?.feedback}
+                      required
+                    />
+                  </label>
+                  <fieldset className="grid gap-2">
+                    <legend className="text-sm font-semibold text-slate-700">Rating</legend>
+                    <div className="flex gap-1" aria-label={`${rating} out of 5 stars selected`}>
+                      {[1, 2, 3, 4, 5].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`text-2xl ${value <= rating ? 'text-accent-orange' : 'text-slate-300'} hover:text-accent-orange`}
+                          onClick={() => setRating(value)}
+                          aria-label={`${value} star${value === 1 ? '' : 's'}`}
+                        >
+                          ★
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  {submitError && <p className="text-sm text-red-600" role="alert">{submitError}</p>}
+                  <button type="submit" disabled={isSaving} className="rounded-lg bg-primary-blue py-3 font-semibold text-white hover:bg-primary-dark-blue disabled:cursor-not-allowed disabled:opacity-60">
+                    {isSaving ? 'Saving feedback...' : editingFeedback ? 'Save changes' : 'Submit feedback'}
+                  </button>
+                </form>
+              </>
+            )}
+          </section>
+        </div>
+      )}
     </section>
   )
 }

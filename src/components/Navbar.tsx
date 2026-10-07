@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { User } from '@supabase/supabase-js'
+import { supabase } from '../lib/supabase'
 
 /**
  * Navbar Component
@@ -7,8 +9,56 @@ import { useState } from 'react'
  */
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [student, setStudent] = useState<User | null>(null)
+  const [profileName, setProfileName] = useState('')
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('')
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen)
+
+  useEffect(() => {
+    if (!supabase) return
+    const client = supabase
+
+    client.auth.getUser().then(({ data }) => setStudent(data.user))
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+      setStudent(session?.user ?? null)
+    })
+
+    return () => authListener.subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!supabase || !student) {
+      setProfileName('')
+      setProfilePhotoUrl('')
+      return
+    }
+
+    let active = true
+    supabase.from('students').select('full_name, photo_url').eq('auth_user_id', student.id).maybeSingle()
+      .then(({ data }) => {
+        if (active && data) {
+          setProfileName(data.full_name || '')
+          setProfilePhotoUrl(data.photo_url || '')
+        }
+      })
+    return () => { active = false }
+  }, [student?.id, student?.user_metadata?.full_name])
+
+  const handleSignOut = async () => {
+    if (!supabase) return
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error('Could not sign out:', error.message)
+      return
+    }
+    setIsMenuOpen(false)
+    window.location.href = '/'
+  }
+
+  const studentName = profileName || student?.user_metadata?.full_name || student?.email?.split('@')[0] || 'Student'
+  const avatarUrl = profilePhotoUrl || String(student?.user_metadata?.avatar_url || '')
+  const studentInitial = studentName.charAt(0).toUpperCase()
 
   // Smooth scroll to section
   const handleNavClick = (id: string) => {
@@ -40,7 +90,7 @@ export function Navbar() {
           {/* Logo and Brand */}
           <div className="flex items-center space-x-3">
             {/* Logo Icon */}
-            <div className="w-8 h-8 bg-gradient-to-br from-primary-blue to-primary-dark-blue rounded-lg flex items-center justify-center">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-blue">
               <span className="text-white font-bold text-sm">U</span>
             </div>
             {/* Brand Name */}
@@ -49,6 +99,16 @@ export function Navbar() {
               <p className="text-xs text-neutral-secondary-text hidden sm:block leading-none">
                 Easy travel for students
               </p>
+            </div>
+            <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-neutral-border">
+              <img
+                src="https://www.sliit.lk/build/assets/images/logo.svg"
+                alt="SLIIT Kandy Campus"
+                className="h-9 w-auto"
+              />
+              <span className="hidden lg:block text-[10px] font-semibold leading-tight text-neutral-secondary-text uppercase tracking-wide">
+                Kandy<br />Campus
+              </span>
             </div>
           </div>
 
@@ -82,9 +142,22 @@ export function Navbar() {
 
           {/* Right Section - Login Button and Mobile Menu Toggle */}
           <div className="flex items-center space-x-4">
-            <button className="hidden sm:block px-6 py-2 text-primary-blue border-2 border-primary-blue rounded-lg font-semibold hover:bg-primary-blue hover:text-white transition-all duration-200">
-              Login
-            </button>
+            {student ? (
+              <div className="hidden sm:flex items-center gap-3">
+                {avatarUrl ? <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-sm font-bold text-primary-dark-blue" aria-hidden="true">{studentInitial}</div>}
+                <a href="/student/profile" className="max-w-[150px] text-right hover:text-primary-blue" aria-label="Open student profile">
+                  <p className="truncate text-sm font-bold text-primary-dark-blue">{studentName}</p>
+                  <p className="truncate text-xs text-neutral-secondary-text">{student.email}</p>
+                </a>
+                <button type="button" onClick={handleSignOut} className="px-3 py-2 text-sm font-semibold text-primary-blue border border-primary-blue rounded-lg hover:bg-primary-blue hover:text-white transition-all duration-200">
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <a href="/student/login" className="hidden sm:block px-6 py-2 text-primary-blue border-2 border-primary-blue rounded-lg font-semibold hover:bg-primary-blue hover:text-white transition-all duration-200">
+                Login
+              </a>
+            )}
 
             {/* Mobile Menu Toggle */}
             <button
@@ -124,9 +197,24 @@ export function Navbar() {
             >
               Feedback
             </button>
-            <button className="block w-full px-4 py-2 mt-2 text-primary-blue border-2 border-primary-blue rounded-lg font-semibold hover:bg-primary-blue hover:text-white transition-all duration-200">
-              Login
-            </button>
+            {student ? (
+              <div className="mt-2 border-t border-neutral-border pt-3">
+                <div className="mb-3 flex items-center gap-3 px-4">
+                  {avatarUrl ? <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-sm font-bold text-primary-dark-blue" aria-hidden="true">{studentInitial}</div>}
+                  <a href="/student/profile" className="min-w-0" onClick={() => setIsMenuOpen(false)} aria-label="Open student profile">
+                    <p className="truncate text-sm font-bold text-primary-dark-blue">{studentName}</p>
+                    <p className="truncate text-xs text-neutral-secondary-text">{student.email}</p>
+                  </a>
+                </div>
+                <button type="button" onClick={handleSignOut} className="block w-full px-4 py-2 text-center text-primary-blue border-2 border-primary-blue rounded-lg font-semibold hover:bg-primary-blue hover:text-white transition-all duration-200">
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <a href="/student/login" className="block w-full px-4 py-2 mt-2 text-center text-primary-blue border-2 border-primary-blue rounded-lg font-semibold hover:bg-primary-blue hover:text-white transition-all duration-200">
+                Login
+              </a>
+            )}
           </div>
         )}
       </div>
