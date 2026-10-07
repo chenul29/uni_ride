@@ -5,6 +5,8 @@ import Helvetica from 'pdfkit/standard-fonts/Helvetica'
 import { AdminIcon } from './AdminIcon'
 import { supabase } from '../../lib/supabase'
 import { AdminManagement } from './AdminManagement'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 type IconName = Parameters<typeof AdminIcon>[0]['name']
 
@@ -66,6 +68,51 @@ type TicketPurchase = {
   balance_after: number
   status: string
   created_at: string
+}
+
+type AdminRecord = {
+  name?: string
+  username?: string
+  email?: string
+  role?: string
+  created_at?: string
+}
+
+async function downloadAdminActivityReport() {
+  if (!supabase) {
+    throw new Error('Supabase is not configured.')
+  }
+
+  const { data, error } = await supabase
+    .from('admins')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+
+  const document = new jsPDF()
+  document.setFontSize(18)
+  document.setTextColor(30, 58, 138)
+  document.text('UniRide System - Admin Activity Report', 14, 20)
+  document.setFontSize(10)
+  document.setTextColor(100, 100, 100)
+  document.text(`Generated on: ${new Date().toLocaleString()}`, 14, 28)
+  document.text('Owned by: K.A.S.S Wijethunga', 14, 34)
+
+  autoTable(document, {
+    startY: 40,
+    head: [['#', 'Name', 'Email', 'Role', 'Created Date']],
+    body: ((data || []) as AdminRecord[]).map((admin, index) => [
+      index + 1,
+      admin.name || admin.username || 'N/A',
+      admin.email || 'N/A',
+      admin.role || 'Administrator',
+      admin.created_at ? new Date(admin.created_at).toLocaleDateString() : 'N/A',
+    ]),
+    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [243, 244, 246] },
+  })
+  document.save('Admin_Activity_Report.pdf')
 }
 
 function Panel({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
@@ -718,7 +765,7 @@ export function AdminDashboard() {
         <StudentsPanel students={students} loading={studentsLoading} error={studentsError} onDelete={deleteStudent} />
         <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? `Supabase connected · Realtime ${realtimeStatus}` : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
         <div className="analytics-grid"><TicketSalesChart transactions={ticketPurchases} /><VerificationChart transactions={ticketPurchases} /></div><div className="lower-grid"><ActivityFeed students={students} feedback={feedback} transactions={ticketPurchases} /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
-        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p>{walletReportError && <p className="database-status database-status-error" role="alert">{walletReportError}</p>}</div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Student Wallet Activity Report' ? downloadWalletActivityReport : report[0] === 'Feedback Report' ? downloadFeedbackReport : (range) => downloadSummaryReport(report[0], range)} downloading={walletReportLoading} />)}</div></section>
+        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p>{walletReportError && <p className="database-status database-status-error" role="alert">{walletReportError}</p>}</div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Admin Activity Report' ? () => { void downloadAdminActivityReport() } : report[0] === 'Student Wallet Activity Report' ? downloadWalletActivityReport : report[0] === 'Feedback Report' ? downloadFeedbackReport : (range) => downloadSummaryReport(report[0], range)} downloading={walletReportLoading} />)}</div></section>
         
         {/* Admin Management Module */}
         <AdminManagement />
