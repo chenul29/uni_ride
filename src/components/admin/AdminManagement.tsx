@@ -12,11 +12,15 @@ interface AdminManagementProps {
   userEmail?: string;
 }
 
+const SUPER_ADMIN_EMAIL = 'admin@uniride.lk';
+
 export const AdminManagement: React.FC<AdminManagementProps> = ({ userEmail }) => {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(
+    () => localStorage.getItem('adminEmail')
+  );
 
   // Form states for creating admin
   const [name, setName] = useState('');
@@ -32,26 +36,23 @@ export const AdminManagement: React.FC<AdminManagementProps> = ({ userEmail }) =
   useEffect(() => {
     const fetchUserAndAdmins = async () => {
       setLoading(true);
-      let activeEmail = userEmail || null;
+      let activeEmail = localStorage.getItem('adminEmail') || userEmail || null;
 
-      // 1. Get email from active Supabase Session
-      if (!activeEmail) {
+      // The admin login uses the admins table, so its stored identity takes
+      // precedence over any unrelated Supabase session.
+      if (!activeEmail && supabase) {
         const { data: { session } } = await supabase.auth.getSession();
         activeEmail = session?.user?.email || null;
       }
 
-      // 2. Fallback to LocalStorage
       if (!activeEmail) {
-        activeEmail = localStorage.getItem('userEmail') || localStorage.getItem('adminEmail') || localStorage.getItem('email');
-        if (!activeEmail) {
-          const storedUser = localStorage.getItem('user');
-          if (storedUser) {
-            try {
-              const parsed = JSON.parse(storedUser);
-              activeEmail = parsed?.email || null;
-            } catch (e) {
-              console.error(e);
-            }
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser);
+            activeEmail = parsed?.email || null;
+          } catch (e) {
+            console.error(e);
           }
         }
       }
@@ -65,7 +66,7 @@ export const AdminManagement: React.FC<AdminManagementProps> = ({ userEmail }) =
 
   // Strictly check if current logged-in user is admin@uniride.lk
   const isSuperAdmin = Boolean(
-    currentUserEmail && currentUserEmail.trim().toLowerCase() === 'admin@uniride.lk'
+    currentUserEmail && currentUserEmail.trim().toLowerCase() === SUPER_ADMIN_EMAIL
   );
 
   const fetchAdmins = async () => {
@@ -96,6 +97,7 @@ export const AdminManagement: React.FC<AdminManagementProps> = ({ userEmail }) =
     if (!window.confirm(`Are you sure you want to delete admin "${adminEmail}"?`)) return;
 
     try {
+      if (!supabase) throw new Error('Supabase is not configured.');
       const { error } = await supabase.from('admins').delete().eq('id', id);
       if (error) throw error;
       alert('Admin deleted successfully!');
@@ -114,6 +116,7 @@ export const AdminManagement: React.FC<AdminManagementProps> = ({ userEmail }) =
 
     setSubmitting(true);
     try {
+      if (!supabase) throw new Error('Supabase is not configured.');
       const { error } = await supabase.from('admins').insert([{ 
         name: name.trim(), 
         email: email.trim().toLowerCase(), 
@@ -146,6 +149,7 @@ export const AdminManagement: React.FC<AdminManagementProps> = ({ userEmail }) =
 
     setUpdatingName(true);
     try {
+      if (!supabase) throw new Error('Supabase is not configured.');
       const { error } = await supabase
         .from('admins')
         .update({ name: editingName.trim() })

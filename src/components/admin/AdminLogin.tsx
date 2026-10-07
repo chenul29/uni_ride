@@ -32,8 +32,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
         throw new Error('Invalid email or password.');
       }
 
-      // Logged in Admin ගේ Name එක localStorage එකේ Save කිරීම
+      // Keep the authenticated admin identity available to dashboard permissions.
       localStorage.setItem('adminName', data.name);
+      localStorage.setItem('adminEmail', String(data.email || email).trim().toLowerCase());
 
       if (onLoginSuccess) {
         onLoginSuccess();

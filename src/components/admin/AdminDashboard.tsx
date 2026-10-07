@@ -86,9 +86,14 @@ async function downloadAdminActivityReport() {
   const { data, error } = await supabase
     .from('admins')
     .select('*')
-    .order('created_at', { ascending: false })
 
   if (error) throw error
+
+  const admins = ((data || []) as AdminRecord[]).sort((first, second) => {
+    const firstDate = first.created_at ? new Date(first.created_at).getTime() : 0
+    const secondDate = second.created_at ? new Date(second.created_at).getTime() : 0
+    return secondDate - firstDate
+  })
 
   const document = new jsPDF()
   document.setFontSize(18)
@@ -102,7 +107,7 @@ async function downloadAdminActivityReport() {
   autoTable(document, {
     startY: 40,
     head: [['#', 'Name', 'Email', 'Role', 'Created Date']],
-    body: ((data || []) as AdminRecord[]).map((admin, index) => [
+    body: admins.map((admin, index) => [
       index + 1,
       admin.name || admin.username || 'N/A',
       admin.email || 'N/A',
@@ -545,6 +550,18 @@ export function AdminDashboard() {
     }
   }
 
+  const handleAdminActivityReport = async () => {
+    setWalletReportError('')
+    setWalletReportLoading(true)
+    try {
+      await downloadAdminActivityReport()
+    } catch (error) {
+      setWalletReportError(error instanceof Error ? error.message : 'Unable to generate the admin activity report.')
+    } finally {
+      setWalletReportLoading(false)
+    }
+  }
+
   const downloadFeedbackReport = async (range: string) => {
     setWalletReportError('')
     setWalletReportLoading(true)
@@ -754,7 +771,7 @@ export function AdminDashboard() {
   }
 
   return <div className="admin-shell">
-    <aside className={`admin-sidebar ${menuOpen ? 'admin-sidebar-open' : ''}`}><div className="admin-brand"><div className="brand-mark">U</div><div><strong>UniRide</strong><span>Admin Portal</span></div><button className="sidebar-close" onClick={() => setMenuOpen(false)} aria-label="Close navigation"><AdminIcon name="close" /></button></div><nav>{navItems.map((item, index) => <a className={index === 0 ? 'active' : ''} href={`#${item.label.toLowerCase()}`} key={item.label} onClick={() => setMenuOpen(false)}><AdminIcon name={item.icon} /><span>{item.label}</span></a>)}</nav><button className="logout-button"><AdminIcon name="logout" /><span>Logout</span></button></aside>
+    <aside className={`admin-sidebar ${menuOpen ? 'admin-sidebar-open' : ''}`}><div className="admin-brand"><div className="brand-mark">U</div><div><strong>UniRide</strong><span>Admin Portal</span></div><button className="sidebar-close" onClick={() => setMenuOpen(false)} aria-label="Close navigation"><AdminIcon name="close" /></button></div><nav>{navItems.map((item, index) => <a className={index === 0 ? 'active' : ''} href={`#${item.label.toLowerCase()}`} key={item.label} onClick={() => setMenuOpen(false)}><AdminIcon name={item.icon} /><span>{item.label}</span></a>)}</nav><button className="logout-button" onClick={() => { localStorage.removeItem('adminName'); localStorage.removeItem('adminEmail'); window.location.href = '/admin' }}><AdminIcon name="logout" /><span>Logout</span></button></aside>
     {menuOpen && <button className="admin-overlay" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
     <div className="admin-main"><header className="admin-topbar"><button className="menu-button" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><AdminIcon name="menu" /></button><div><h1>Dashboard</h1><p>Overview of UniRide activity</p></div><div className="admin-user"><button className="notification-button" aria-label="Notifications"><AdminIcon name="bell" /><span /></button><div className="admin-avatar">AD</div><div className="admin-user-name"><strong>Admin</strong><small>Administrator</small></div><AdminIcon name="chevron" size={15} /></div></header>
       <main className="admin-content"><section className="admin-welcome"><div className="admin-welcome-copy"><span className="eyebrow">SLIIT Kandy / Admin Portal</span><h2>Good morning, Admin.</h2><p>Keep today&apos;s rides moving smoothly.</p><div className="quick-actions"><button><AdminIcon name="plus" size={16} /> Add Student</button><button type="button" onClick={() => setIsTopUpOpen(true)}><AdminIcon name="plus" size={16} /> Top Up Wallet</button></div></div><div className="welcome-mark"><AdminIcon name="dashboard" size={42} /></div></section>
@@ -765,7 +782,7 @@ export function AdminDashboard() {
         <StudentsPanel students={students} loading={studentsLoading} error={studentsError} onDelete={deleteStudent} />
         <p className={`database-status database-status-${connectionStatus}`} role="status">{connectionStatus === 'checking' ? 'Checking Supabase connection...' : connectionStatus === 'connected' ? `Supabase connected · Realtime ${realtimeStatus}` : connectionStatus === 'not-configured' ? 'Supabase is not configured' : 'Supabase connection failed'}</p>
         <div className="analytics-grid"><TicketSalesChart transactions={ticketPurchases} /><VerificationChart transactions={ticketPurchases} /></div><div className="lower-grid"><ActivityFeed students={students} feedback={feedback} transactions={ticketPurchases} /><div id="feedback"><FeedbackSnapshot feedback={feedback} loading={feedbackLoading} error={feedbackError} onDelete={deleteFeedback} /></div></div>
-        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p>{walletReportError && <p className="database-status database-status-error" role="alert">{walletReportError}</p>}</div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Admin Activity Report' ? () => { void downloadAdminActivityReport() } : report[0] === 'Student Wallet Activity Report' ? downloadWalletActivityReport : report[0] === 'Feedback Report' ? downloadFeedbackReport : (range) => downloadSummaryReport(report[0], range)} downloading={walletReportLoading} />)}</div></section>
+        <section className="reports-section"><div className="reports-heading"><div><span className="eyebrow">Export centre</span><h2>Reports &amp; Downloads</h2><p>Review and prepare operational reports for your records.</p>{walletReportError && <p className="database-status database-status-error" role="alert">{walletReportError}</p>}</div><button className="outline-button"><AdminIcon name="reports" size={16} /> View report history</button></div><div className="reports-grid">{reports.map((report) => <ReportCard key={report[0]} report={report} onDownload={report[0] === 'Admin Activity Report' ? () => handleAdminActivityReport() : report[0] === 'Student Wallet Activity Report' ? downloadWalletActivityReport : report[0] === 'Feedback Report' ? downloadFeedbackReport : (range) => downloadSummaryReport(report[0], range)} downloading={walletReportLoading} />)}</div></section>
         
         {/* Admin Management Module */}
         <AdminManagement />
