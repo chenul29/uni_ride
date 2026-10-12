@@ -97,7 +97,7 @@ The Supabase Dashboard is shared separately from this Git repository. Database t
 
 ### Netlify deployment
 
-Netlify cannot read a local `.env` file. Add these variables in **Site configuration → Environment variables** for the **Production** deploy context:
+Netlify cannot read a local `.env` file. Add these variables in **Site configuration → Environment variables** for the **Production** deploy context (and any other deploy context you use):
 
 - `VITE_SUPABASE_URL` — the Supabase project URL
 - `VITE_SUPABASE_PUBLISHABLE_KEY` — the Supabase publishable/anon key
