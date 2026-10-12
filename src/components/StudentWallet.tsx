@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { TicketQrCode } from './TicketQrCode'
 
 type WalletTicket = {
   route: string
@@ -6,6 +7,7 @@ type WalletTicket = {
   payment: string
   total: number
   token: string
+  ticketNumber: string
 }
 
 type PurchaseHistoryEntry = WalletTicket & {
@@ -69,8 +71,9 @@ export function StudentWallet({ ticket, history, balance, onClose, onDone }: Stu
             <strong>{ticket.route}</strong>
           </div>
           <span className="wallet-ticket-status">Ready</span>
+          <TicketQrCode token={ticket.token} />
           <dl className="booking-summary">
-            <div><dt>Booking token</dt><dd>{ticket.token}</dd></div>
+            <div><dt>Ticket number</dt><dd>{ticket.ticketNumber}</dd></div>
             <div><dt>Tickets</dt><dd>{ticket.tickets}</dd></div>
             <div><dt>Paid from</dt><dd>{ticket.payment}</dd></div>
             <div><dt>Total</dt><dd>LKR {ticket.total.toLocaleString()}</dd></div>

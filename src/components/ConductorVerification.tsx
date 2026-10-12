@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
+import { getTicketTokenFromQr } from '../lib/ticket'
+import { supabase } from '../lib/supabase'
 
 type VerificationResult = 'valid' | 'invalid' | null
+
+type PurchasedTicketRow = {
+  booking_token: string
+  route: string
+  tickets: number
+  payment_method: string
+  amount: number
+  status: string
+}
 
 const DEMO_FACILITY_CODE = '482916'
 
@@ -26,8 +37,12 @@ export function ConductorVerification() {
   const [cameraOpen, setCameraOpen] = useState(false)
   const [cameraMessage, setCameraMessage] = useState('Camera is ready when you are.')
   const [ticketScanned, setTicketScanned] = useState(false)
+  const [ticketQrValid, setTicketQrValid] = useState(false)
   const [facilityCode, setFacilityCode] = useState('')
   const [result, setResult] = useState<VerificationResult>(null)
+  const [ticketToken, setTicketToken] = useState<string | null>(null)
+  const [verificationError, setVerificationError] = useState('')
+  const [verifying, setVerifying] = useState(false)
 
   useEffect(() => {
     if (!cameraOpen) return
@@ -40,8 +55,14 @@ export function ConductorVerification() {
       { facingMode: 'environment' },
       { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1 },
       (decodedText) => {
+        const ticketToken = getTicketTokenFromQr(decodedText)
         setTicketScanned(true)
-        setCameraMessage(`Ticket QR captured: ${decodedText}`)
+        setTicketQrValid(Boolean(ticketToken))
+        setTicketToken(ticketToken)
+        setCameraMessage(ticketToken
+          ? `Valid UniRide ticket QR captured: ${ticketToken}`
+          : 'This is not a valid UniRide ticket QR code.')
+        if (!ticketToken) setResult('invalid')
         scanner.stop().catch(() => undefined)
         scanner.clear()
         scannerRef.current = null
@@ -72,19 +93,68 @@ export function ConductorVerification() {
 
   const markQrScanned = () => {
     setTicketScanned(true)
-    setCameraMessage('Ticket QR captured. Enter the facility code to continue.')
+    setTicketQrValid(true)
+    setTicketToken('DEMO')
+    setCameraMessage('Valid UniRide ticket QR captured. Enter the facility code to continue.')
     closeCamera()
   }
 
-  const verifyTicket = (event: React.FormEvent) => {
+  const verifyTicket = async (event: React.FormEvent) => {
     event.preventDefault()
-    setResult(facilityCode === DEMO_FACILITY_CODE ? 'valid' : 'invalid')
+    setVerificationError('')
+    if (!ticketQrValid || !ticketToken || facilityCode !== DEMO_FACILITY_CODE) {
+      setResult('invalid')
+      return
+    }
+    if (!supabase) {
+      setVerificationError('Ticket verification is unavailable because Supabase is not configured.')
+      setResult('invalid')
+      return
+    }
+
+    setVerifying(true)
+    try {
+      const { data: ticket, error: ticketError } = await supabase
+        .from('wallet_transactions')
+        .select('booking_token, route, tickets, payment_method, amount, status')
+        .eq('booking_token', ticketToken)
+        .eq('status', 'completed')
+        .maybeSingle()
+
+      if (ticketError) throw ticketError
+      if (!ticket) {
+        throw new Error('This ticket could not be found or is not completed.')
+      }
+
+      const purchasedTicket = ticket as PurchasedTicketRow
+      const { error: saveError } = await supabase.from('ticket_verifications').insert({
+        booking_token: purchasedTicket.booking_token,
+        ticket_number: purchasedTicket.booking_token.replace(/^UR/, ''),
+        route: purchasedTicket.route,
+        tickets: purchasedTicket.tickets,
+        payment_method: purchasedTicket.payment_method,
+        amount: purchasedTicket.amount,
+        facility_code: facilityCode,
+      })
+
+      if (saveError) throw saveError
+      setResult('valid')
+    } catch (error) {
+      setResult('invalid')
+      setVerificationError(error instanceof Error ? error.message : 'The ticket could not be verified and saved.')
+    } finally {
+      setVerifying(false)
+    }
   }
 
   const reset = () => {
     setTicketScanned(false)
+    setTicketQrValid(false)
     setFacilityCode('')
     setResult(null)
+    setTicketToken(null)
+    setVerificationError('')
+    setVerifying(false)
     setCameraMessage('Camera is ready when you are.')
   }
 
@@ -100,9 +170,9 @@ export function ConductorVerification() {
               {!cameraOpen && !ticketScanned && <button type="button" onClick={openCamera} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800"><svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8.5A1.5 1.5 0 014.5 7h2l1-1.5h5L13.5 7h2A1.5 1.5 0 0117 8.5v8A1.5 1.5 0 0115.5 18h-11A1.5 1.5 0 013 16.5v-8zM8 12.5a3 3 0 106 0 3 3 0 00-6 0z" /></svg>Open camera</button>}
               {cameraOpen && <button type="button" onClick={closeCamera} className="min-h-12 rounded-xl border border-slate-200 px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50">Close camera</button>}
               {!ticketScanned && <button type="button" onClick={markQrScanned} className="min-h-12 rounded-xl border border-blue-200 px-5 text-sm font-bold text-blue-700 transition hover:bg-blue-50">Use demo QR</button>}
-            </div>{ticketScanned && <div className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"><span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-500 text-xs text-white">✓</span> Ticket QR scanned successfully</div>}
+            </div>{ticketScanned && <div className={`mt-5 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ${ticketQrValid ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}><span className={`grid h-5 w-5 place-items-center rounded-full text-xs text-white ${ticketQrValid ? 'bg-emerald-500' : 'bg-red-500'}`}>{ticketQrValid ? '✓' : '!'}</span>{ticketQrValid ? 'Valid ticket QR scanned' : 'Invalid ticket QR code'}</div>}
           </section>
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><div className="mb-6"><span className="mb-2 grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-sm font-extrabold text-amber-700">02</span><h2 className="mt-3 text-xl font-bold text-blue-950">Enter facility code</h2><p className="mt-1 text-sm text-slate-500">Use the six-digit code for this conductor facility.</p></div><form onSubmit={verifyTicket}><label htmlFor="facility-code" className="text-xs font-bold uppercase tracking-wider text-slate-600">6-digit facility code</label><input id="facility-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required value={facilityCode} onChange={(event) => { setFacilityCode(event.target.value.replace(/\D/g, '')); setResult(null) }} placeholder="000000" className="mt-2 block min-h-14 w-full rounded-xl border border-slate-200 bg-white px-4 text-center text-2xl font-extrabold tracking-[0.35em] text-blue-950 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /><button type="submit" disabled={facilityCode.length !== 6} className="mt-5 min-h-12 w-full rounded-xl bg-amber-400 px-5 text-sm font-extrabold text-blue-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50">Verify ticket</button></form>{result && <div className={`mt-6 rounded-2xl border p-5 ${result === 'valid' ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`} role="alert"><div className="flex items-start gap-3"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg font-bold text-white ${result === 'valid' ? 'bg-emerald-500' : 'bg-red-500'}`}>{result === 'valid' ? '✓' : '!'}</span><div><h3 className={`font-extrabold ${result === 'valid' ? 'text-emerald-800' : 'text-red-800'}`}>{result === 'valid' ? 'Ticket is valid' : 'Ticket is not valid'}</h3><p className={`mt-1 text-xs leading-5 ${result === 'valid' ? 'text-emerald-700' : 'text-red-700'}`}>{result === 'valid' ? 'This ticket is cleared for boarding. Have a safe ride.' : 'The facility code does not match. Check the code and try again.'}</p></div></div><button type="button" onClick={reset} className="mt-4 text-xs font-bold text-slate-600 underline underline-offset-4">Start another verification</button></div>}</section>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><div className="mb-6"><span className="mb-2 grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-sm font-extrabold text-amber-700">02</span><h2 className="mt-3 text-xl font-bold text-blue-950">Enter facility code</h2><p className="mt-1 text-sm text-slate-500">Use the six-digit code for this conductor facility.</p></div><form onSubmit={verifyTicket}><label htmlFor="facility-code" className="text-xs font-bold uppercase tracking-wider text-slate-600">6-digit facility code</label><input id="facility-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required value={facilityCode} onChange={(event) => { setFacilityCode(event.target.value.replace(/\D/g, '')); setResult(null); setVerificationError('') }} placeholder="000000" className="mt-2 block min-h-14 w-full rounded-xl border border-slate-200 bg-white px-4 text-center text-2xl font-extrabold tracking-[0.35em] text-blue-950 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /><button type="submit" disabled={verifying || !ticketScanned || !ticketQrValid || facilityCode.length !== 6} className="mt-5 min-h-12 w-full rounded-xl bg-amber-400 px-5 text-sm font-extrabold text-blue-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50">{verifying ? 'Verifying and saving...' : 'Verify ticket'}</button></form>{verificationError && <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-xs font-semibold text-red-700" role="alert">{verificationError}</p>}{result && <div className={`mt-6 rounded-2xl border p-5 ${result === 'valid' ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`} role="alert"><div className="flex items-start gap-3"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg font-bold text-white ${result === 'valid' ? 'bg-emerald-500' : 'bg-red-500'}`}>{result === 'valid' ? '✓' : '!'}</span><div><h3 className={`font-extrabold ${result === 'valid' ? 'text-emerald-800' : 'text-red-800'}`}>{result === 'valid' ? 'Ticket is valid' : 'Ticket is not valid'}</h3><p className={`mt-1 text-xs leading-5 ${result === 'valid' ? 'text-emerald-700' : 'text-red-700'}`}>{result === 'valid' ? 'Verified ticket details were saved successfully.' : 'The QR code, facility code, or ticket record is not valid.'}</p></div></div><button type="button" onClick={reset} className="mt-4 text-xs font-bold text-slate-600 underline underline-offset-4">Start another verification</button></div>}</section>
         </div><p className="mt-8 text-center text-xs text-slate-400">Frontend demo mode · Verification results will connect to the ticket service later.</p>
       </main>
     </div>
