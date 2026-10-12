@@ -95,6 +95,17 @@ Copy-Item .env.example .env
 
 The Supabase Dashboard is shared separately from this Git repository. Database tables, columns, authentication settings, and Row Level Security policies must be created in the shared Supabase project so every teammate uses the same schema. Only the publishable key belongs in the frontend; never put a Supabase service-role key in `.env` or browser code.
 
+### Netlify deployment
+
+Netlify cannot read a local `.env` file. Add these variables in **Site configuration → Environment variables** for the **Production** deploy context:
+
+- `VITE_SUPABASE_URL` — the Supabase project URL
+- `VITE_SUPABASE_PUBLISHABLE_KEY` — the Supabase publishable/anon key
+
+Then trigger **Deploys → Trigger deploy → Clear cache and deploy site**. These values are embedded during `npm run build`, so changing them requires a new deploy. Do not add a service-role key to Netlify because frontend variables are publicly visible.
+
+Before deploying, run the SQL files in `supabase/` in the same Supabase project, including `ticket_verifications.sql`. Also confirm the required tables have policies that allow the operations used by the app.
+
 ## Project Structure
 
 ```
