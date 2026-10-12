@@ -6,6 +6,7 @@ type PurchasedTicket = {
   payment: string
   total: number
   token: string
+  ticketNumber: string
 }
 
 type PurchaseHistoryEntry = PurchasedTicket & {
@@ -50,7 +51,7 @@ export function PurchasedTickets({ history, loading, onBookRide, onDeleteTicket 
         <button type="button" className="purchased-tickets-home-action" onClick={onBookRide}>Book a Ride</button>
       </div>
       {deleteError && <p className="purchased-tickets-home-error" role="alert">{deleteError}</p>}
-      {loading ? <div className="purchased-tickets-home-empty"><span aria-hidden="true">...</span><div><strong>Loading tickets...</strong><p>Checking your saved bookings.</p></div></div> : history.length === 0 ? <div className="purchased-tickets-home-empty"><span aria-hidden="true">🎟</span><div><strong>No tickets yet</strong><p>Your booked rides will appear here after you complete a purchase.</p></div></div> : <div className="purchased-tickets-home-list">{history.map((ticket) => <article className="purchased-tickets-home-item" key={ticket.token}><div className="purchased-tickets-home-route"><span>{ticket.status}</span><strong>{ticket.route}</strong><small>{ticket.date} · {ticket.time}</small></div><div className="purchased-tickets-home-details"><strong>LKR {ticket.total.toLocaleString()}</strong><span>{ticket.tickets} {ticket.tickets === 1 ? 'ticket' : 'tickets'}</span><small>{ticket.token}</small><button type="button" className="purchased-tickets-home-delete" onClick={() => handleDelete(ticket)} disabled={deletingToken === ticket.token}>{deletingToken === ticket.token ? 'Deleting...' : 'Delete ticket'}</button></div></article>)}</div>}
+      {loading ? <div className="purchased-tickets-home-empty"><span aria-hidden="true">...</span><div><strong>Loading tickets...</strong><p>Checking your saved bookings.</p></div></div> : history.length === 0 ? <div className="purchased-tickets-home-empty"><span aria-hidden="true">🎟</span><div><strong>No tickets yet</strong><p>Your booked rides will appear here after you complete a purchase.</p></div></div> : <div className="purchased-tickets-home-list">{history.map((ticket) => <article className="purchased-tickets-home-item" key={ticket.token}><div className="purchased-tickets-home-route"><span>{ticket.status}</span><strong>{ticket.route}</strong><small>{ticket.date} · {ticket.time}</small></div>      <div className="purchased-tickets-home-details"><strong>LKR {ticket.total.toLocaleString()}</strong><span>{ticket.tickets} {ticket.tickets === 1 ? 'ticket' : 'tickets'}</span><small>Ticket {ticket.ticketNumber}</small><button type="button" className="purchased-tickets-home-delete" onClick={() => handleDelete(ticket)} disabled={deletingToken === ticket.token}>{deletingToken === ticket.token ? 'Deleting...' : 'Delete ticket'}</button></div></article>)}</div>}
     </div>
   </section>
 }

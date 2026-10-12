@@ -15,6 +15,7 @@ import StudentLogin from './components/studnet/StudentLogin'
 import StudentProfile from './components/studnet/StudentProfile'
 import { LiveBusLauncher, LiveBusTracking } from './components/LiveBusTracking'
 import { supabase } from './lib/supabase'
+import { ticketNumberFromToken } from './lib/ticket'
 
 type PurchasedTicket = {
   route: string
@@ -22,6 +23,7 @@ type PurchasedTicket = {
   payment: string
   total: number
   token: string
+  ticketNumber: string
 }
 
 type PurchaseHistoryEntry = PurchasedTicket & {
@@ -240,6 +242,7 @@ function App() {
             payment: transaction.payment_method,
             total: Number(transaction.amount),
             token: transaction.booking_token,
+            ticketNumber: ticketNumberFromToken(transaction.booking_token),
             date: purchasedAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             time: purchasedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
             status: transaction.status,

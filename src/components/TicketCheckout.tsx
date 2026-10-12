@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { generateTicketNumber } from '../lib/ticket'
+import { TicketQrCode } from './TicketQrCode'
 
 type TicketCheckoutProps = {
   onClose: () => void
@@ -12,6 +14,7 @@ type TicketDetails = {
   payment: string
   total: number
   token: string
+  ticketNumber: string
 }
 
 type Route = {
@@ -76,12 +79,14 @@ export function TicketCheckout({ onClose, onPurchase }: TicketCheckoutProps) {
       setPurchaseError('Select an available route before continuing.')
       return
     }
+    const ticketNumber = generateTicketNumber()
     const purchasedTicket = {
       route: routeName,
       tickets,
       payment,
       total,
-      token: `UR${Math.floor(1000 + Math.random() * 9000)}`,
+      token: `UR${ticketNumber}`,
+      ticketNumber,
     }
     try {
       await onPurchase(purchasedTicket)
@@ -100,8 +105,10 @@ export function TicketCheckout({ onClose, onPurchase }: TicketCheckoutProps) {
             <div className="checkout-success-icon">✓</div>
             <span className="checkout-eyebrow">Booking confirmed</span>
             <h2 id="checkout-title">Your ride is ready.</h2>
-            <p>Show this booking token to the conductor when you board.</p>
-            <div className="booking-token">{ticket.token}</div>
+            <p>Show this QR code or ticket number to the conductor when you board.</p>
+            <TicketQrCode token={ticket.token} />
+            <div className="booking-token">{ticket.ticketNumber}</div>
+            <span className="booking-token-label">Ticket number</span>
             <dl className="booking-summary">
               <div><dt>Route</dt><dd>{ticket.route}</dd></div>
               <div><dt>Tickets</dt><dd>{ticket.tickets}</dd></div>
