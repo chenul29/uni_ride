@@ -15,6 +15,9 @@ create table if not exists public.ticket_verifications (
 create index if not exists ticket_verifications_booking_token_idx
   on public.ticket_verifications (booking_token);
 
+create unique index if not exists ticket_verifications_booking_token_unique_idx
+  on public.ticket_verifications (booking_token);
+
 alter table public.ticket_verifications enable row level security;
 
 drop policy if exists "Allow conductor verification inserts" on public.ticket_verifications;

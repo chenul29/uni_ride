@@ -102,8 +102,8 @@ function App() {
     return updatedBalance
   }
 
-  const saveWalletTransaction = async () => {
-    if (!walletTicket || !supabase) {
+  const saveWalletTransaction = async (ticket: PurchasedTicket, balanceAfter: number) => {
+    if (!supabase) {
       throw new Error('Supabase is not configured.')
     }
 
@@ -117,12 +117,12 @@ function App() {
 
     const { error } = await supabase.from('wallet_transactions').insert({
       student_id: student?.id || null,
-      booking_token: walletTicket.token,
-      route: walletTicket.route,
-      tickets: walletTicket.tickets,
-      payment_method: walletTicket.payment,
-      amount: walletTicket.total,
-      balance_after: walletBalance,
+      booking_token: ticket.token,
+      route: ticket.route,
+      tickets: ticket.tickets,
+      payment_method: ticket.payment,
+      amount: ticket.total,
+      balance_after: balanceAfter,
       status: 'completed',
     })
 
@@ -321,6 +321,8 @@ if (window.location.pathname === '/conductor') {
             const updatedBalance = ticket.payment === 'UniRide wallet'
               ? await decreaseWalletBalance(ticket.total)
               : null
+            const balanceAfter = updatedBalance ?? walletBalance
+            await saveWalletTransaction(ticket, balanceAfter)
             const purchasedAt = new Date()
             const purchasedAtTimestamp = purchasedAt.getTime()
             setCheckoutOpen(false)
@@ -340,7 +342,7 @@ if (window.location.pathname === '/conductor') {
           }}
         />
       )}
-      {walletTicket && <StudentWallet ticket={walletTicket} history={purchaseHistory} balance={walletBalance} onClose={() => setWalletTicket(null)} onDone={saveWalletTransaction} />}
+      {walletTicket && <StudentWallet ticket={walletTicket} history={purchaseHistory} balance={walletBalance} onClose={() => setWalletTicket(null)} onDone={async () => undefined} />}
     </div>
   )
 }

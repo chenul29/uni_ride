@@ -97,7 +97,7 @@ export function ConductorVerification() {
         tickets: purchasedTicket.tickets,
         payment_method: purchasedTicket.payment_method,
         amount: purchasedTicket.amount,
-        facility_code: 'CONDUCTOR_SCAN',
+        facility_code: facilityCode || 'CONDUCTOR_SCAN',
       })
 
       if (saveError) throw saveError
