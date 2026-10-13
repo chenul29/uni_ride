@@ -11,6 +11,6 @@ export function ticketNumberFromToken(token: string): string {
 
 export function getTicketTokenFromQr(payload: string): string | null {
   const normalizedPayload = payload.trim().toUpperCase()
-  const match = /^(?:UNIRIDE:TICKET:)?(UR\d{6})$/.exec(normalizedPayload)
-  return match?.[1] || null
+  const match = /^(?:UNIRIDE:TICKET:)?(?:UR)?(\d{6})$/.exec(normalizedPayload)
+  return match?.[1] ? `UR${match[1]}` : null
 }
