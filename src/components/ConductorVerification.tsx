@@ -14,6 +14,8 @@ type PurchasedTicketRow = {
   status: string
 }
 
+const DEMO_FACILITY_CODE = '482916'
+
 function QrFrame() {
   return (
     <div className="relative mx-auto aspect-square w-full max-w-[238px] overflow-hidden rounded-2xl bg-slate-900 shadow-inner">
@@ -36,12 +38,25 @@ export function ConductorVerification() {
   const [cameraMessage, setCameraMessage] = useState('Camera is ready when you are.')
   const [ticketScanned, setTicketScanned] = useState(false)
   const [ticketQrValid, setTicketQrValid] = useState(false)
+  const [ticketToken, setTicketToken] = useState<string | null>(null)
+  const [facilityCode, setFacilityCode] = useState('')
   const [result, setResult] = useState<VerificationResult>(null)
   const [verificationError, setVerificationError] = useState('')
   const [verifying, setVerifying] = useState(false)
 
-  const verifyTicket = async (scannedToken: string) => {
+  const verifyTicket = async (event: React.FormEvent) => {
+    event.preventDefault()
     setVerificationError('')
+    if (!ticketQrValid || !ticketToken) {
+      setVerificationError('Scan a valid UniRide ticket QR code first.')
+      setResult('invalid')
+      return
+    }
+    if (facilityCode && (facilityCode.length !== 6 || facilityCode !== DEMO_FACILITY_CODE)) {
+      setVerificationError('The optional facility code is not valid.')
+      setResult('invalid')
+      return
+    }
     if (!supabase) {
       setVerificationError('Ticket verification is unavailable because Supabase is not configured.')
       setResult('invalid')
@@ -53,7 +68,7 @@ export function ConductorVerification() {
       const { data: ticket, error: ticketError } = await supabase
         .from('wallet_transactions')
         .select('booking_token, route, tickets, payment_method, amount, status')
-        .eq('booking_token', scannedToken)
+        .eq('booking_token', ticketToken)
         .eq('status', 'completed')
         .maybeSingle()
 
@@ -67,6 +82,7 @@ export function ConductorVerification() {
         .from('ticket_verifications')
         .select('id')
         .eq('booking_token', purchasedTicket.booking_token)
+        .limit(1)
         .maybeSingle()
 
       if (previousVerificationError) throw previousVerificationError
@@ -108,12 +124,11 @@ export function ConductorVerification() {
         const ticketToken = getTicketTokenFromQr(decodedText)
         setTicketScanned(true)
         setTicketQrValid(Boolean(ticketToken))
+        setTicketToken(ticketToken)
         setCameraMessage(ticketToken
-          ? `Ticket QR captured: ${ticketToken}. Verifying ticket...`
+          ? `Ticket QR captured: ${ticketToken}. Enter the optional code or verify now.`
           : 'This is not a valid UniRide ticket QR code.')
-        if (ticketToken) {
-          void verifyTicket(ticketToken)
-        } else {
+        if (!ticketToken) {
           setResult('invalid')
         }
         scanner.stop().catch(() => undefined)
@@ -147,14 +162,16 @@ export function ConductorVerification() {
   const markQrScanned = () => {
     setTicketScanned(true)
     setTicketQrValid(true)
-    setCameraMessage('Ticket QR captured. Verifying ticket...')
+    setTicketToken('DEMO')
+    setCameraMessage('Demo QR captured. Use a real purchased ticket QR to verify.')
     closeCamera()
-    void verifyTicket('DEMO')
   }
 
   const reset = () => {
     setTicketScanned(false)
     setTicketQrValid(false)
+    setTicketToken(null)
+    setFacilityCode('')
     setResult(null)
     setVerificationError('')
     setVerifying(false)
@@ -175,6 +192,13 @@ export function ConductorVerification() {
               {!ticketScanned && <button type="button" onClick={markQrScanned} disabled={verifying} className="min-h-12 rounded-xl border border-blue-200 px-5 text-sm font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50">Use demo QR</button>}
             </div>{ticketScanned && <div className={`mt-5 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ${ticketQrValid ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}><span className={`grid h-5 w-5 place-items-center rounded-full text-xs text-white ${ticketQrValid ? 'bg-emerald-500' : 'bg-red-500'}`}>{ticketQrValid ? '✓' : '!'}</span>{ticketQrValid ? 'Valid ticket QR scanned' : 'Invalid ticket QR code'}</div>}
           </section>
+          {ticketScanned && ticketQrValid && <form onSubmit={verifyTicket} className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+            <h2 className="text-xl font-bold text-blue-950">Optional facility code</h2>
+            <p className="mt-1 text-sm text-slate-500">Enter the six-digit conductor code if required. You may leave it blank.</p>
+            <label htmlFor="facility-code" className="mt-5 block text-xs font-bold uppercase tracking-wider text-slate-600">6-digit facility code (optional)</label>
+            <input id="facility-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={facilityCode} onChange={(event) => { setFacilityCode(event.target.value.replace(/\D/g, '')); setResult(null); setVerificationError('') }} placeholder="Optional" className="mt-2 block min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-center text-xl font-extrabold tracking-[0.35em] text-blue-950 outline-none transition placeholder:text-slate-300 placeholder:tracking-normal focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+            <button type="submit" disabled={verifying} className="mt-5 min-h-12 w-full rounded-xl bg-amber-400 px-5 text-sm font-extrabold text-blue-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50">{verifying ? 'Verifying ticket...' : 'Verify ticket'}</button>
+          </form>}
         </div><p className="mt-8 text-center text-xs text-slate-400">Scan once to verify each ticket.</p>
       </main>
       {result && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-5" role="dialog" aria-modal="true" aria-labelledby="verification-result-title"><div className={`w-full max-w-sm rounded-2xl border bg-white p-6 text-center shadow-2xl ${result === 'valid' ? 'border-emerald-200' : 'border-red-200'}`}><span className={`mx-auto grid h-14 w-14 place-items-center rounded-full text-3xl font-bold text-white ${result === 'valid' ? 'bg-emerald-500' : 'bg-red-500'}`}>{result === 'valid' ? '✓' : '!'}</span><h2 id="verification-result-title" className={`mt-4 text-xl font-extrabold ${result === 'valid' ? 'text-emerald-800' : 'text-red-800'}`}>{result === 'valid' ? 'Valid ticket' : 'Ticket not valid'}</h2><p className={`mt-2 text-sm ${result === 'valid' ? 'text-emerald-700' : 'text-red-700'}`}>{result === 'valid' ? 'This ticket has been verified successfully.' : verificationError || 'The QR code or ticket record is not valid.'}</p><button type="button" onClick={reset} className="mt-6 min-h-11 w-full rounded-xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-800">Scan another ticket</button></div></div>}
