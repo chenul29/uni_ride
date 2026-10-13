@@ -44,15 +44,9 @@ export function ConductorVerification() {
   const [verificationError, setVerificationError] = useState('')
   const [verifying, setVerifying] = useState(false)
 
-  const verifyTicket = async (event: React.FormEvent) => {
-    event.preventDefault()
+  const verifyTicket = async (scannedToken: string, scannedFacilityCode = facilityCode) => {
     setVerificationError('')
-    if (!ticketQrValid || !ticketToken) {
-      setVerificationError('Scan a valid UniRide ticket QR code first.')
-      setResult('invalid')
-      return
-    }
-    if (facilityCode && (facilityCode.length !== 6 || facilityCode !== DEMO_FACILITY_CODE)) {
+    if (scannedFacilityCode && (scannedFacilityCode.length !== 6 || scannedFacilityCode !== DEMO_FACILITY_CODE)) {
       setVerificationError('The optional facility code is not valid.')
       setResult('invalid')
       return
@@ -68,7 +62,7 @@ export function ConductorVerification() {
       const { data: ticket, error: ticketError } = await supabase
         .from('wallet_transactions')
         .select('booking_token, route, tickets, payment_method, amount, status')
-        .eq('booking_token', ticketToken)
+        .eq('booking_token', scannedToken)
         .eq('status', 'completed')
         .maybeSingle()
 
@@ -78,27 +72,15 @@ export function ConductorVerification() {
       }
 
       const purchasedTicket = ticket as PurchasedTicketRow
-      const { data: previousVerification, error: previousVerificationError } = await supabase
-        .from('ticket_verifications')
-        .select('id')
-        .eq('booking_token', purchasedTicket.booking_token)
-        .limit(1)
-        .maybeSingle()
-
-      if (previousVerificationError) throw previousVerificationError
-      if (previousVerification) {
-        throw new Error('This ticket has already been verified.')
-      }
-
-      const { error: saveError } = await supabase.from('ticket_verifications').insert({
+      const { error: saveError } = await supabase.from('ticket_verifications').upsert({
         booking_token: purchasedTicket.booking_token,
         ticket_number: purchasedTicket.booking_token.replace(/^UR/, ''),
         route: purchasedTicket.route,
         tickets: purchasedTicket.tickets,
         payment_method: purchasedTicket.payment_method,
         amount: purchasedTicket.amount,
-        facility_code: facilityCode || 'CONDUCTOR_SCAN',
-      })
+        facility_code: scannedFacilityCode || 'CONDUCTOR_SCAN',
+      }, { onConflict: 'booking_token' })
 
       if (saveError) throw saveError
       setResult('valid')
@@ -126,9 +108,11 @@ export function ConductorVerification() {
         setTicketQrValid(Boolean(ticketToken))
         setTicketToken(ticketToken)
         setCameraMessage(ticketToken
-          ? `Ticket QR captured: ${ticketToken}. Enter the optional code or verify now.`
+          ? `Ticket QR captured: ${ticketToken}. Saving verification...`
           : 'This is not a valid UniRide ticket QR code.')
-        if (!ticketToken) {
+        if (ticketToken) {
+          void verifyTicket(ticketToken)
+        } else {
           setResult('invalid')
         }
         scanner.stop().catch(() => undefined)
@@ -167,6 +151,11 @@ export function ConductorVerification() {
     closeCamera()
   }
 
+  const handleVerificationSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+    if (ticketToken) void verifyTicket(ticketToken)
+  }
+
   const reset = () => {
     setTicketScanned(false)
     setTicketQrValid(false)
@@ -192,7 +181,7 @@ export function ConductorVerification() {
               {!ticketScanned && <button type="button" onClick={markQrScanned} disabled={verifying} className="min-h-12 rounded-xl border border-blue-200 px-5 text-sm font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50">Use demo QR</button>}
             </div>{ticketScanned && <div className={`mt-5 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ${ticketQrValid ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}><span className={`grid h-5 w-5 place-items-center rounded-full text-xs text-white ${ticketQrValid ? 'bg-emerald-500' : 'bg-red-500'}`}>{ticketQrValid ? '✓' : '!'}</span>{ticketQrValid ? 'Valid ticket QR scanned' : 'Invalid ticket QR code'}</div>}
           </section>
-          {ticketScanned && ticketQrValid && <form onSubmit={verifyTicket} className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+          {ticketScanned && ticketQrValid && <form onSubmit={handleVerificationSubmit} className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
             <h2 className="text-xl font-bold text-blue-950">Optional facility code</h2>
             <p className="mt-1 text-sm text-slate-500">Enter the six-digit conductor code if required. You may leave it blank.</p>
             <label htmlFor="facility-code" className="mt-5 block text-xs font-bold uppercase tracking-wider text-slate-600">6-digit facility code (optional)</label>

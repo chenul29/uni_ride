@@ -26,6 +26,13 @@ create policy "Allow conductor verification inserts"
   to anon, authenticated
   with check (true);
 
+drop policy if exists "Allow conductor verification updates" on public.ticket_verifications;
+create policy "Allow conductor verification updates"
+  on public.ticket_verifications for update
+  to anon, authenticated
+  using (true)
+  with check (true);
+
 drop policy if exists "Allow conductor verification reads" on public.ticket_verifications;
 create policy "Allow conductor verification reads"
   on public.ticket_verifications for select
