@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
+import { ticketNumberFromToken } from '../lib/ticket'
 
 type TicketQrCodeProps = {
   token: string
@@ -14,7 +15,7 @@ export function TicketQrCode({ token }: TicketQrCodeProps) {
     setSource('')
     setError('')
 
-    QRCode.toDataURL(`uniride:ticket:${token}`, {
+    QRCode.toDataURL(ticketNumberFromToken(token), {
       errorCorrectionLevel: 'M',
       margin: 2,
       width: 180,

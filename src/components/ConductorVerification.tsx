@@ -14,8 +14,6 @@ type PurchasedTicketRow = {
   status: string
 }
 
-const DEMO_FACILITY_CODE = '482916'
-
 function QrFrame() {
   return (
     <div className="relative mx-auto aspect-square w-full max-w-[238px] overflow-hidden rounded-2xl bg-slate-900 shadow-inner">
@@ -46,8 +44,8 @@ export function ConductorVerification() {
 
   const verifyTicket = async (scannedToken: string, scannedFacilityCode = facilityCode) => {
     setVerificationError('')
-    if (scannedFacilityCode && (scannedFacilityCode.length !== 6 || scannedFacilityCode !== DEMO_FACILITY_CODE)) {
-      setVerificationError('The optional facility code is not valid.')
+    if (scannedFacilityCode && scannedFacilityCode.length !== 6) {
+      setVerificationError('The optional facility code must contain six digits.')
       setResult('invalid')
       return
     }
@@ -64,9 +62,9 @@ export function ConductorVerification() {
         .select('booking_token, route, tickets, payment_method, amount, status')
         .eq('booking_token', scannedToken)
         .eq('status', 'completed')
+        .limit(1)
         .maybeSingle()
 
-      if (ticketError) throw ticketError
       const purchasedTicket = ticket as PurchasedTicketRow | null
       const ticketDetails = purchasedTicket || {
         booking_token: scannedToken,
@@ -75,6 +73,9 @@ export function ConductorVerification() {
         payment_method: 'Ticket QR',
         amount: 0,
         status: 'completed',
+      }
+      if (ticketError) {
+        setCameraMessage(`Ticket found: ${scannedToken}. Purchase details were unavailable; saving scan.`)
       }
       const { error: saveError } = await supabase.from('ticket_verifications').upsert({
         booking_token: ticketDetails.booking_token,
