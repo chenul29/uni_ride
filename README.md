@@ -102,9 +102,26 @@ Netlify cannot read a local `.env` file. Add these variables in **Site configura
 - `VITE_SUPABASE_URL` — the Supabase project URL
 - `VITE_SUPABASE_PUBLISHABLE_KEY` — the Supabase publishable/anon key
 
-Then trigger **Deploys → Trigger deploy → Clear cache and deploy site**. These values are embedded during `npm run build`, so changing them requires a new deploy. Do not add a service-role key to Netlify because frontend variables are publicly visible.
+Because `VITE_SUPABASE_PUBLISHABLE_KEY` is intentionally embedded in the browser bundle, do not mark that variable as a secret in Netlify. If Netlify's secrets scanning still flags the value, add a project environment variable named `SECRETS_SCAN_OMIT_KEYS` with this value:
+
+```text
+VITE_SUPABASE_PUBLISHABLE_KEY
+```
+
+This excludes only the public Supabase key from scanning; do not disable secrets scanning globally. Then trigger **Deploys → Trigger deploy → Clear cache and deploy site**. These values are embedded during `npm run build`, so changing them requires a new deploy. Do not add a service-role key to Netlify because frontend variables are publicly visible.
 
 Before deploying, run the SQL files in `supabase/` in the same Supabase project, including `ticket_verifications.sql`. Also confirm the required tables have policies that allow the operations used by the app.
+
+### Vercel deployment
+
+Import this repository into Vercel and keep the project root at the repository root. The included `vercel.json` configures the Vite production build (`npm run build`), publishes `dist`, and rewrites application paths such as `/admin` and `/student/login` to the SPA entry point.
+
+In **Project Settings → Environment Variables**, add these variables for the environments you deploy:
+
+- `VITE_SUPABASE_URL` — the Supabase project URL
+- `VITE_SUPABASE_PUBLISHABLE_KEY` — the Supabase publishable/anon key
+
+Vercel injects environment variables during the build, so redeploy after adding or changing them. Do not add a Supabase service-role key: `VITE_*` values are included in the browser bundle. If the deployment fails before the build starts, confirm that Vercel is using the repository root as the **Root Directory**, `npm install` as the install step, `npm run build` as the build command, and `dist` as the output directory.
 
 ## Project Structure
 
