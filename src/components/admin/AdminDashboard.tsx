@@ -1,7 +1,4 @@
 import { FormEvent, useEffect, useState } from 'react'
-import PDFDocument from 'pdfkit'
-import * as pdfKitModule from 'pdfkit'
-import Helvetica from 'pdfkit/standard-fonts/Helvetica'
 import { AdminIcon } from './AdminIcon'
 import { supabase } from '../../lib/supabase'
 import { AdminManagement } from './AdminManagement'
@@ -315,28 +312,21 @@ function ReportCard({ report, onDownload, downloading }: { report: string[]; onD
   return <article className="report-card"><div className="report-title"><span className="report-icon"><AdminIcon name="reports" size={17} /></span><h3>{report[0]}</h3></div><p>{report[1]}</p><div className="report-owner"><span className="owner-avatar">{report[2].slice(0, 2)}</span><span><small>Owned by</small><strong>{report[2]}</strong></span></div><div className="report-controls"><select value={range} onChange={(event) => setRange(event.target.value)} aria-label={`${report[0]} date range`}><option>Last 30 days</option><option>This month</option><option>This year</option></select><select defaultValue="PDF" aria-label={`${report[0]} format`}><option>PDF</option><option>CSV</option></select><button className="download-button" type="button" onClick={() => onDownload?.(range)} disabled={!supportsPdfDownload || downloading} title={supportsPdfDownload ? 'Download PDF' : 'Downloads will be connected later'} aria-label={supportsPdfDownload ? `Download ${report[0]} as PDF` : `${report[0]} download unavailable`}><AdminIcon name="download" size={16} /></button></div></article>
 }
 
-function drawPdfTemplate(pdf: PDFKit.PDFDocument, pageNumber: number) {
-  const pageWidth = pdf.page.width
-  const pageHeight = pdf.page.height
-  const left = 34
-  const right = pageWidth - 34
-  const top = 30
-  const bottom = pageHeight - 30
-
-  pdf.save()
-  pdf.lineWidth(1).strokeColor('#cbd5e1').rect(left, top, pageWidth - 68, pageHeight - 60).stroke()
-  pdf.lineWidth(2).strokeColor('#2563eb').moveTo(left, top).lineTo(right, top).stroke()
-  pdf.roundedRect(left + 16, top + 14, 30, 30, 6).fillColor('#2563eb').fill()
-  pdf.fontSize(18).fillColor('#ffffff').text('U', left + 24, top + 18, { lineBreak: false })
-  pdf.fontSize(11).fillColor('#1e3a8a').text('SLIIT UNIVERSITY', left + 56, top + 13, { lineBreak: false })
-  pdf.fontSize(8).fillColor('#64748b').text('UniRide Administration Portal', left + 56, top + 29, { lineBreak: false })
-  pdf.moveTo(left + 16, top + 58).lineTo(right - 16, top + 58).lineWidth(.5).strokeColor('#e2e8f0').stroke()
-  pdf.moveTo(left + 16, bottom - 25).lineTo(right - 16, bottom - 25).stroke()
-  pdf.fontSize(8).fillColor('#64748b').text('SLIIT University | UniRide Admin Portal', left + 16, bottom - 18, { lineBreak: false })
-  pdf.text(`Page ${pageNumber}`, right - 55, bottom - 18, { width: 55, align: 'right', lineBreak: false })
-  pdf.restore()
-  pdf.x = 48
-  pdf.y = top + 78
+function reportRowsToTable(rows: string[]) {
+  const parsedRows = rows.map((row) => row.split(' | ').map((part) => {
+    const separator = part.indexOf(': ')
+    return separator === -1
+      ? { key: 'Details', value: part }
+      : { key: part.slice(0, separator), value: part.slice(separator + 2) }
+  }))
+  const headers = Array.from(new Set(parsedRows.flatMap((row) => row.map((cell) => cell.key))))
+  return {
+    headers: headers.length ? headers : ['Details'],
+    rows: parsedRows.map((row) => {
+      const values = new Map(row.map((cell) => [cell.key, cell.value]))
+      return headers.map((header) => values.get(header) || '-')
+    }),
+  }
 }
 
 export function AdminDashboard() {
@@ -492,57 +482,49 @@ export function AdminDashboard() {
       if (error) throw error
 
       const transactions = (data || []) as WalletTransaction[]
-      const registerStdFonts = (pdfKitModule as unknown as { registerStdFonts: (fontData: unknown) => void }).registerStdFonts
-      registerStdFonts(Helvetica)
-      const chunks: Uint8Array[] = []
-      let pageNumber = 0
-      const pdf = new PDFDocument({ margin: 48, size: 'A4', autoFirstPage: false })
-      pdf.on('data', (chunk: Uint8Array) => chunks.push(chunk))
-      const addReportPage = () => {
-        pageNumber += 1
-        pdf.addPage()
-        drawPdfTemplate(pdf, pageNumber)
-      }
-      addReportPage()
-      const pdfReady = new Promise<void>((resolve, reject) => {
-        pdf.on('end', () => resolve())
-        pdf.on('error', reject)
-      })
-
-      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text('Student Wallet Activity Report', { width: 500 })
-      pdf.fontSize(10).fillColor('#475569').text(`Period: ${range}`, { width: 500 })
-      pdf.text(`Generated: ${now.toLocaleString()}`, { width: 500 })
-      pdf.moveDown()
-      pdf.fontSize(11).fillColor('#1e293b').text(`Transactions in period: ${transactions.length}`, { width: 500 })
-      pdf.text(`Total transaction value: LKR ${transactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0).toFixed(2)}`, { width: 500 })
-      pdf.moveDown()
+      const document = new jsPDF()
+      document.setFillColor(37, 99, 235)
+      document.rect(0, 0, 210, 12, 'F')
+      document.setFontSize(18)
+      document.setTextColor(30, 58, 138)
+      document.text('Student Wallet Activity Report', 14, 25)
+      document.setFontSize(9)
+      document.setTextColor(71, 85, 105)
+      document.text(`Period: ${range}`, 14, 32)
+      document.text(`Generated: ${now.toLocaleString()} · Records: ${transactions.length}`, 14, 38)
+      document.text(`Total transaction value: LKR ${transactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0).toFixed(2)}`, 14, 44)
 
       if (transactions.length === 0) {
-        pdf.fontSize(10).fillColor('#475569').text('No wallet transactions were recorded during this period.', { width: 500 })
+        document.setFontSize(11)
+        document.text('No wallet transactions were recorded during this period.', 14, 56)
       } else {
-        transactions.forEach((transaction, index) => {
-          if (pdf.y > pdf.page.height - 125) addReportPage()
-          pdf.fontSize(11).fillColor('#1e293b').text(`${index + 1}. ${transaction.route} | LKR ${Number(transaction.amount).toFixed(2)} | ${transaction.status}`, { width: 500 })
-          pdf.fontSize(9).fillColor('#475569').text(`${new Date(transaction.created_at).toLocaleString()} | ${transaction.tickets} ticket(s) | ${transaction.payment_method}`, { width: 500 })
-          pdf.text(`Booking: ${transaction.booking_token} | Balance after: LKR ${Number(transaction.balance_after).toFixed(2)}`, { width: 500 })
-          pdf.moveDown(.6)
+        autoTable(document, {
+          startY: 52,
+          head: [['Booking', 'Route', 'Tickets', 'Payment', 'Amount', 'Balance after', 'Status', 'Created']],
+          body: transactions.map((transaction) => [
+            transaction.booking_token,
+            transaction.route,
+            String(transaction.tickets),
+            transaction.payment_method,
+            `LKR ${Number(transaction.amount).toFixed(2)}`,
+            `LKR ${Number(transaction.balance_after).toFixed(2)}`,
+            transaction.status,
+            new Date(transaction.created_at).toLocaleDateString(),
+          ]),
+          margin: { left: 14, right: 14, top: 52, bottom: 18 },
+          styles: { fontSize: 7, cellPadding: 3, textColor: [51, 65, 85], lineColor: [203, 213, 225], lineWidth: 0.2, overflow: 'linebreak' },
+          headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'left' },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          didDrawPage: (hookData) => {
+            document.setFontSize(8)
+            document.setTextColor(100, 116, 139)
+            document.text('SLIIT University | UniRide Admin Portal', 14, 289)
+            document.text(`Page ${hookData.pageNumber}`, 180, 289)
+          },
         })
       }
 
-      pdf.end()
-      await pdfReady
-      const blobParts = chunks.map((chunk) => {
-        const copy = new Uint8Array(chunk.byteLength)
-        copy.set(chunk)
-        return copy.buffer as ArrayBuffer
-      })
-      const blob = new Blob(blobParts, { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `uniride-student-wallet-activity-${now.toISOString().slice(0, 10)}.pdf`
-      link.click()
-      URL.revokeObjectURL(url)
+      document.save(`uniride-student-wallet-activity-${now.toISOString().slice(0, 10)}.pdf`)
     } catch (error) {
       setWalletReportError(error instanceof Error ? error.message : 'Unable to generate the wallet activity report.')
     } finally {
@@ -573,58 +555,40 @@ export function AdminDashboard() {
           ? new Date(now.getFullYear(), now.getMonth(), 1)
           : new Date(now.getFullYear(), 0, 1)
       const rows = feedback.filter((item) => new Date(item.created_at) >= from)
-      const registerStdFonts = (pdfKitModule as unknown as { registerStdFonts: (fontData: unknown) => void }).registerStdFonts
-      registerStdFonts(Helvetica)
-      const chunks: Uint8Array[] = []
-      let pageNumber = 0
-      const pdf = new PDFDocument({ margin: 48, size: 'A4', autoFirstPage: false })
-      pdf.on('data', (chunk: Uint8Array) => chunks.push(chunk))
-      const addReportPage = () => {
-        pageNumber += 1
-        pdf.addPage()
-        drawPdfTemplate(pdf, pageNumber)
+      const document = new jsPDF()
+      document.setFillColor(37, 99, 235)
+      document.rect(0, 0, 210, 12, 'F')
+      document.setFontSize(18)
+      document.setTextColor(30, 58, 138)
+      document.text('Student Feedback Report', 14, 25)
+      document.setFontSize(9)
+      document.setTextColor(71, 85, 105)
+      document.text(`Period: ${range}`, 14, 32)
+      document.text(`Generated: ${now.toLocaleString()} · Records: ${rows.length}`, 14, 38)
+      if (rows.length > 0) {
+        document.text(`Average rating: ${(rows.reduce((sum, item) => sum + Number(item.rating), 0) / rows.length).toFixed(1)}/5`, 14, 44)
       }
-
-      addReportPage()
-      const pdfReady = new Promise<void>((resolve, reject) => {
-        pdf.on('end', () => resolve())
-        pdf.on('error', reject)
-      })
-
-      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text('Student Feedback Report', { width: 500 })
-      pdf.fontSize(10).fillColor('#475569').text(`Period: ${range}`, { width: 500 })
-      pdf.text(`Generated: ${now.toLocaleString()}`, { width: 500 })
-      pdf.moveDown()
-      pdf.fontSize(11).fillColor('#1e293b').text(`Feedback entries in period: ${rows.length}`, { width: 500 })
-      if (rows.length > 0) pdf.text(`Average rating: ${(rows.reduce((sum, item) => sum + Number(item.rating), 0) / rows.length).toFixed(1)}/5`, { width: 500 })
-      pdf.moveDown()
-
       if (rows.length === 0) {
-        pdf.fontSize(10).fillColor('#475569').text('No feedback was submitted during this period.', { width: 500 })
+        document.setFontSize(11)
+        document.text('No feedback was submitted during this period.', 14, 56)
       } else {
-        rows.forEach((item, index) => {
-          if (pdf.y > pdf.page.height - 145) addReportPage()
-          pdf.fontSize(11).fillColor('#1e293b').text(`${index + 1}. ${item.student_name} | Rating: ${item.rating}/5`, { width: 500 })
-          pdf.fontSize(9).fillColor('#475569').text(new Date(item.created_at).toLocaleString(), { width: 500 })
-          pdf.fontSize(10).fillColor('#334155').text(`"${item.feedback}"`, { width: 500 })
-          pdf.moveDown(.8)
+        autoTable(document, {
+          startY: 52,
+          head: [['Student', 'Rating', 'Feedback', 'Submitted']],
+          body: rows.map((item) => [item.student_name, `${item.rating}/5`, item.feedback, new Date(item.created_at).toLocaleDateString()]),
+          margin: { left: 14, right: 14, top: 52, bottom: 18 },
+          styles: { fontSize: 8, cellPadding: 3, textColor: [51, 65, 85], lineColor: [203, 213, 225], lineWidth: 0.2, overflow: 'linebreak' },
+          headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'left' },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          didDrawPage: (hookData) => {
+            document.setFontSize(8)
+            document.setTextColor(100, 116, 139)
+            document.text('SLIIT University | UniRide Admin Portal', 14, 289)
+            document.text(`Page ${hookData.pageNumber}`, 180, 289)
+          },
         })
       }
-
-      pdf.end()
-      await pdfReady
-      const blobParts = chunks.map((chunk) => {
-        const copy = new Uint8Array(chunk.byteLength)
-        copy.set(chunk)
-        return copy.buffer as ArrayBuffer
-      })
-      const blob = new Blob(blobParts, { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `uniride-feedback-report-${now.toISOString().slice(0, 10)}.pdf`
-      link.click()
-      URL.revokeObjectURL(url)
+      document.save(`uniride-feedback-report-${now.toISOString().slice(0, 10)}.pdf`)
     } catch (error) {
       setWalletReportError(error instanceof Error ? error.message : 'Unable to generate the feedback report.')
     } finally {
@@ -732,37 +696,46 @@ export function AdminDashboard() {
               .filter((date) => !Number.isNaN(date.getTime()))
             return activityDates.length === 0 || activityDates.some((date) => date >= from)
           })
-          .map((student) => Object.entries(student)
-            .filter(([key, value]) => key.toLowerCase() !== 'password' && value !== null && value !== undefined && value !== '')
-            .map(([key, value]) => {
-              const formattedValue = studentDateFields.includes(key)
-                ? new Date(String(value)).toLocaleString()
-                : typeof value === 'object' ? JSON.stringify(value) : String(value)
-              return `${key.replace(/_/g, ' ')}: ${formattedValue}`
-            })
-            .join(' | '))
+          .map((student) => [
+            `Student: ${String(student.full_name || 'N/A')}`,
+            `Email: ${String(student.email || 'N/A')}`,
+            `Registered: ${student.created_at ? new Date(String(student.created_at)).toLocaleString() : 'N/A'}`,
+            `Last activity: ${student.last_login || student.last_login_at || student.login_at ? new Date(String(student.last_login || student.last_login_at || student.login_at)).toLocaleString() : 'N/A'}`,
+          ].join(' | '))
           .filter(Boolean)
       }
-      const registerStdFonts = (pdfKitModule as unknown as { registerStdFonts: (fontData: unknown) => void }).registerStdFonts
-      registerStdFonts(Helvetica)
-      const chunks: Uint8Array[] = []
-      const pdf = new PDFDocument({ margin: 48, size: 'A4' })
-      pdf.on('data', (chunk: Uint8Array) => chunks.push(chunk))
-      const pdfReady = new Promise<void>((resolve, reject) => { pdf.on('end', resolve); pdf.on('error', reject) })
-      pdf.font('Helvetica').fontSize(20).fillColor('#1e3a8a').text(title, { width: 500 })
-      pdf.fontSize(10).fillColor('#475569').text(`Period: ${range}`, { width: 500 }).text(`Generated: ${now.toLocaleString()}`, { width: 500 }).moveDown()
-      pdf.fontSize(11).fillColor('#1e293b').text(`Records in period: ${rows.length}`, { width: 500 }).moveDown()
-      if (rows.length === 0) pdf.fontSize(10).fillColor('#475569').text('No records were found during this period.', { width: 500 })
-      else rows.forEach((row, index) => pdf.fontSize(10).fillColor('#334155').text(`${index + 1}. ${row}`, { width: 500 }).moveDown(.4))
-      pdf.end()
-      await pdfReady
-      const blob = new Blob([new Uint8Array(chunks.reduce((all, chunk) => [...all, ...chunk], [] as number[]))], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `uniride-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${now.toISOString().slice(0, 10)}.pdf`
-      link.click()
-      URL.revokeObjectURL(url)
+      const document = new jsPDF()
+      const table = reportRowsToTable(rows)
+      document.setFillColor(37, 99, 235)
+      document.rect(0, 0, 210, 12, 'F')
+      document.setFontSize(18)
+      document.setTextColor(30, 58, 138)
+      document.text(title, 14, 25)
+      document.setFontSize(9)
+      document.setTextColor(71, 85, 105)
+      document.text(`Period: ${range}`, 14, 32)
+      document.text(`Generated: ${now.toLocaleString()} · Records: ${rows.length}`, 14, 38)
+      if (rows.length === 0) {
+        document.setFontSize(11)
+        document.text('No records were found during this period.', 14, 52)
+      } else {
+        autoTable(document, {
+          startY: 46,
+          head: [table.headers],
+          body: table.rows,
+          margin: { left: 14, right: 14, top: 46, bottom: 18 },
+          styles: { fontSize: 7, cellPadding: 3, textColor: [51, 65, 85], lineColor: [203, 213, 225], lineWidth: 0.2, overflow: 'linebreak' },
+          headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'left' },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          didDrawPage: (hookData) => {
+            document.setFontSize(8)
+            document.setTextColor(100, 116, 139)
+            document.text('SLIIT University | UniRide Admin Portal', 14, 289)
+            document.text(`Page ${hookData.pageNumber}`, 180, 289)
+          },
+        })
+      }
+      document.save(`uniride-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${now.toISOString().slice(0, 10)}.pdf`)
     } catch (error) {
       setWalletReportError(error instanceof Error ? error.message : `Unable to generate the ${title}.`)
     } finally {
