@@ -297,7 +297,7 @@ if (window.location.pathname === '/conductor') {
       <Navbar />
       <main>
         <Hero onBookRide={() => setCheckoutOpen(true)} />
-        <PurchasedTickets history={purchaseHistory} loading={purchaseHistoryLoading} onBookRide={() => setCheckoutOpen(true)} onDeleteTicket={async (ticket) => {
+        <PurchasedTickets history={purchaseHistory} loading={purchaseHistoryLoading} onBookRide={() => setCheckoutOpen(true)} onViewTicket={(ticket) => setWalletTicket(ticket)} onDeleteTicket={async (ticket) => {
           if (!supabase) throw new Error('Supabase is not configured.')
 
           const { error } = await supabase.from('wallet_transactions').delete().eq('booking_token', ticket.token)
